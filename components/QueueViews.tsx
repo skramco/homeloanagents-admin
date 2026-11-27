@@ -22,6 +22,7 @@ export function ApprovalsView({ loans }: { loans: LoanIndex }) {
         <span className="muted">Only a licensed MLO can approve these. Target: same business day. Lorinn is backup only if she holds MLO licenses in CA, TX and FL.</span>
       </header>
       {!canApprove ? <div className="banner warn">You are viewing as {ws.role}. Only Mark (or a licensed backup) can act on these.</div> : null}
+      {open.length === 0 ? <div className="card ghost"><span className="muted">Nothing waiting for approval. Quotes, lock extensions and other MLO items land here once the bots are connected.</span></div> : null}
       {open.map((a) => {
         const l = loans[a.loanId];
         return (
@@ -58,6 +59,7 @@ export function OutboundView({ loans }: { loans: LoanIndex }) {
         <h1>Outbound review</h1>
         <span className="muted">Every bot message passes the Compliance monitor, then a processor reads it before it goes out. After 4 weeks under the error target this moves to sampled review.</span>
       </header>
+      {open.length === 0 ? <div className="card ghost"><span className="muted">No outbound messages to review. Bot-drafted texts, emails and calls land here once the bots are connected.</span></div> : null}
       {open.map((o) => {
         const l = loans[o.loanId];
         const mine = o.reviewer === ws.role;
@@ -107,6 +109,7 @@ export function EscalationsView({ loans }: { loans: LoanIndex }) {
         <h1>Escalations</h1>
         <span className="muted">The Dispatcher routes each one by the game plan’s escalation rules. Items for the person you are viewing as are marked.</span>
       </header>
+      {open.length === 0 ? <div className="card ghost"><span className="muted">No escalations. The Dispatcher routes items here once the bots are connected.</span></div> : null}
       {open.map((e) => {
         const l = loans[e.loanId];
         const mine = e.owners.includes(ws.role);

@@ -9,7 +9,8 @@ Planned home: **admin.homeloanagents.com**, deployed as its own Netlify project.
 - **Sign-in** with a shared team password (fails closed if not configured). Every page except `/login` needs a session.
 - **Pipeline** with pilot KPIs, stage filters and one row per file.
 - **Live voice-agent leads**: when Supabase keys are set, real rows from `call_leads` (written by the homeloanagents-web webhook) appear at the top of the pipeline as Lead-stage files, with the call summary on the file.
-- **Mark’s approvals, Outbound review, Escalations, Bot monitor, Loan file** (status and conditions, bot activity, borrower communication, audit log) and **bot chat**. These run on sample data from `lib/sample-data.ts`.
+- **Real loan files from Vesta**: the pipeline lists the loans in the Vesta pipeline view for the selected environment (BETA by default), using the same `POST /pipeline/views` call as pro-api. Each file shows its Vesta stage, lock, TRID clock and a "From Vesta" panel. No mock loans.
+- **Mark’s approvals, Outbound review, Escalations** are empty until the bots write real items. **Bot monitor** and **bot chat** are still demo content.
 - Clicks (approve, send, pause a bot, chat) are saved only in your browser’s local storage so you can try the flow. Nothing is sent to borrowers or other systems. **Reset demo** in the sidebar clears it.
 
 ## Run it locally
@@ -28,7 +29,9 @@ Environment variables (see `.env.example`):
 | `ADMIN_SESSION_SECRET` | Signing session cookies. At least 32 characters: `openssl rand -hex 32` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional. Real voice-agent leads from the UFF Loans project. Same values as homeloanagents-web. |
 | `VESTA_BETA_API_TOKEN`, `VESTA_BETA_API_URL` | Vesta BETA. URL defaults to `https://uff.beta.vesta.com/api/v1`. |
-| `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Vesta PROD. No default URL, so PROD stays off until both are set. |
+| `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Vesta PROD. URL defaults to `https://uff.vesta.com/api/v1`. |
+| `VESTA_BETA_PIPELINE_VIEW_ID`, `VESTA_PROD_PIPELINE_VIEW_ID` | Pipeline view the app lists. BETA defaults to the HLA view `fbbb992f-…`; PROD has none yet. |
+| `VESTA_BETA_USER_ID`, `VESTA_PROD_USER_ID` | Optional. Vesta admin user the pipeline query runs as; defaults match pro-api. |
 | `VESTA_API_VERSION` | Optional, defaults to `26.4`. |
 
 ## Deploy to Netlify at admin.homeloanagents.com
@@ -67,8 +70,9 @@ Roadmap:
 app/(app)/          signed-in pages (pipeline, approvals, outbound, escalations, bots, loans/[id])
 app/login/          sign-in page and server actions
 components/         UI (client components)
-lib/sample-data.ts  sample files, queues and the 12-bot roster
-lib/data.ts         loads live call_leads from Supabase and merges with sample data
+lib/sample-data.ts  stages, the 12-bot roster and (empty) queues
+lib/data.ts         loads call_leads from Supabase and loans from Vesta
+lib/vesta/          Vesta config (BETA/PROD), vestaFetch and the pipeline view mapper
 lib/session.ts      signed-cookie session
 middleware.ts       requires a session on every page
 app/tokens.css      HomeLoanAgents brand tokens (copied from homeloanagents-web)

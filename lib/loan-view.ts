@@ -12,6 +12,8 @@ export const firstName = (name: string) => name.split(" ")[0];
 export type FeedItem = { when: string; bot: string; kind: string; text: string; tone: "done" | "now" | "alert" };
 
 export function botFeed(l: Loan): FeedItem[] {
+  // Real Vesta files: the bots are not connected yet, so there is no history to show.
+  if (l.source === "vesta") return [];
   const feed: FeedItem[] = [
     { when: "Now", bot: l.bot, kind: l.health === "attention" ? "waiting on a person" : "in progress", text: l.botNow, tone: l.health === "attention" ? "alert" : "now" },
   ];
@@ -25,6 +27,7 @@ export function botFeed(l: Loan): FeedItem[] {
 export type CommsItem = { when: string; channel: string; dir: string; who: string; text: string };
 
 export function commsLog(l: Loan): CommsItem[] {
+  if (l.source === "vesta") return [];
   const items: CommsItem[] = [];
   const [ch, when] = l.lastContact.split(" · ");
   items.push({ when: when ?? "", channel: ch, dir: "Latest", who: "Logged automatically", text: `Most recent touchpoint with ${firstName(l.name)}.` });
@@ -54,6 +57,7 @@ export function commsLog(l: Loan): CommsItem[] {
 }
 
 export function coverage(l: Loan) {
+  if (l.source === "vesta") return [];
   return STAGES.slice(0, l.stage + 1).map((stage, j) => {
     const missing = l.gaps.includes(j);
     return { stage, text: MILESTONES[j], missing, status: missing ? "Not sent" : `Sent ${l.dates[j] ?? ""}`.trim() };

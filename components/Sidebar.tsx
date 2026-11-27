@@ -52,7 +52,7 @@ export function Sidebar({ loanCount }: { loanCount: number }) {
         <span className="roles-note">{ROLE_NOTES[ws.role]}</span>
       </div>
       <div className="side-foot">
-        Sample data plus live voice-agent leads when Supabase is connected.{" "}
+        Real loans from Vesta plus voice-agent leads. Clicks are saved only in this browser.{" "}
         <button type="button" onClick={ws.reset} style={{ background: "none", border: 0, padding: 0, color: "var(--emerald-200)", textDecoration: "underline", cursor: "pointer", fontSize: 12 }}>
           Reset demo
         </button>
