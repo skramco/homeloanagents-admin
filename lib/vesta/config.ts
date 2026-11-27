@@ -17,7 +17,7 @@ export const VESTA_ENV_COOKIE = "hla_vesta_env";
 export const VESTA_PROD_ROLES = ["Mark"];
 
 const DEFAULT_BETA_URL = "https://uff.beta.vesta.com/api/v1";
-const DEFAULT_API_VERSION = "26.2";
+const DEFAULT_API_VERSION = "26.4";
 
 export type VestaConfig = {
   env: VestaEnv;
@@ -48,6 +48,7 @@ export async function vestaStatus() {
   const prod = vestaConfig("prod");
   return {
     env,
+    apiVersion: process.env.VESTA_API_VERSION || DEFAULT_API_VERSION,
     beta: { configured: isConfigured(beta), host: beta.baseUrl ? new URL(beta.baseUrl).host : null },
     prod: { configured: isConfigured(prod), host: prod.baseUrl ? new URL(prod.baseUrl).host : null },
   };

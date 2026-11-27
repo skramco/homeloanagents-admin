@@ -35,7 +35,7 @@ export function VestaSwitch({ status, canUseProd }: { status: VestaStatus; canUs
       </form>
       <span className="small">
         {current.configured ? (
-          <>Calls go to <span className="mono">{current.host}</span></>
+          <>Calls go to <span className="mono">{current.host}</span>, API <span className="mono">v{status.apiVersion}</span></>
         ) : (
           <>Not configured. Add {status.env === "prod" ? "VESTA_PROD_API_URL and VESTA_PROD_API_TOKEN" : "VESTA_BETA_API_TOKEN"} in Netlify.</>
         )}
