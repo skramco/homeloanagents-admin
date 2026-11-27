@@ -29,7 +29,7 @@ Environment variables (see `.env.example`):
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional. Real voice-agent leads from the UFF Loans project. Same values as homeloanagents-web. |
 | `VESTA_BETA_API_TOKEN`, `VESTA_BETA_API_URL` | Vesta BETA. URL defaults to `https://uff.beta.vesta.com/api/v1`. |
 | `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Vesta PROD. No default URL, so PROD stays off until both are set. |
-| `VESTA_API_VERSION` | Optional, defaults to `26.2`. |
+| `VESTA_API_VERSION` | Optional, defaults to `26.4`. |
 
 ## Deploy to Netlify at admin.homeloanagents.com
 
