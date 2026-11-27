@@ -27,6 +27,9 @@ Environment variables (see `.env.example`):
 | `ADMIN_PASSWORD` | Signing in. Long random passphrase. |
 | `ADMIN_SESSION_SECRET` | Signing session cookies. At least 32 characters: `openssl rand -hex 32` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional. Real voice-agent leads from the UFF Loans project. Same values as homeloanagents-web. |
+| `VESTA_BETA_API_TOKEN`, `VESTA_BETA_API_URL` | Vesta BETA. URL defaults to `https://uff.beta.vesta.com/api/v1`. |
+| `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Vesta PROD. No default URL, so PROD stays off until both are set. |
+| `VESTA_API_VERSION` | Optional, defaults to `26.2`. |
 
 ## Deploy to Netlify at admin.homeloanagents.com
 
@@ -34,6 +37,10 @@ Environment variables (see `.env.example`):
 2. **Project configuration → Environment variables**: add the four variables above. Mark `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` as secret.
 3. **Domain management → Add a domain** → `admin.homeloanagents.com`, then add the DNS record Netlify shows (a CNAME to the project’s netlify.app name) wherever homeloanagents.com’s DNS lives. Netlify issues the HTTPS certificate.
 4. Deploy. Visiting any page sends you to `/login`.
+
+## Vesta BETA / PROD switch
+
+The bar under the pilot banner picks which Vesta environment the app calls. It defaults to **BETA**, only Mark can switch to **PROD** (with a confirm), the bar turns red while PROD is on, and the choice resets to BETA when the 12-hour session ends. Server code calls Vesta through `vestaFetch()` in `lib/vesta/config.ts`, which adds `Authorization: Token …` and `X-Api-Version` like the Pro Portal does. Tokens never reach the browser.
 
 ## Data
 
