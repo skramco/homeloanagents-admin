@@ -7,10 +7,11 @@ export type Condition = { text: string; owner: string; status: ConditionStatus }
 
 /** Consent ledger flags, in this order: AI disclosure, TCPA (calls + texts), E-SIGN, call recording. */
 export type Consent = {
-  aiDisclosure: boolean;
-  tcpa: boolean;
-  esign: boolean;
-  recording: boolean;
+  /** null = not tracked for this file yet (e.g. a Vesta loan with no consent ledger). */
+  aiDisclosure: boolean | null;
+  tcpa: boolean | null;
+  esign: boolean | null;
+  recording: boolean | null;
 };
 
 export type Loan = {
@@ -40,7 +41,9 @@ export type Loan = {
   gaps: number[];
   conditions: Condition[];
   /** Where this record came from. */
-  source: "sample" | "call_leads";
+  source: "sample" | "call_leads" | "vesta";
+  /** Extra read-only facts shown on the loan file (e.g. straight from the Vesta pipeline view). */
+  facts?: { label: string; value: string }[];
   callSummary?: string | null;
   phone?: string | null;
   email?: string | null;

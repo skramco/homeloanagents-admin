@@ -2,19 +2,34 @@ import { PipelineView } from "@/components/PipelineView";
 import { loadLoans, supabaseConfigured } from "@/lib/data";
 
 export default async function PipelinePage() {
-  const { loans, liveCount, liveError } = await loadLoans();
+  const { loans, liveCount, liveError, vesta } = await loadLoans();
+  const env = vesta.env.toUpperCase();
   return (
     <>
+      {vesta.error ? (
+        <div className="banner warn">No Vesta loans: {vesta.error}</div>
+      ) : (
+        <div className="banner">
+          <span className="live-dot" /> {vesta.loans.length}
+          {vesta.total !== null && vesta.total > vesta.loans.length ? ` of ${vesta.total}` : ""} loan file{vesta.loans.length === 1 ? "" : "s"} from Vesta {env}.
+        </div>
+      )}
       {liveError ? (
-        <div className="banner warn">Could not load live voice-agent leads from Supabase ({liveError}). Showing sample data only.</div>
+        <div className="banner warn">Could not load voice-agent leads from Supabase ({liveError}).</div>
       ) : supabaseConfigured() ? (
         <div className="banner">
-          <span className="live-dot" /> {liveCount} live voice-agent lead{liveCount === 1 ? "" : "s"} from Supabase, plus sample files.
+          <span className="live-dot" /> {liveCount} voice-agent lead{liveCount === 1 ? "" : "s"} from Supabase.
         </div>
       ) : (
-        <div className="banner warn">Sample data only. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to show real voice-agent leads.</div>
+        <div className="banner warn">Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to show voice-agent leads.</div>
       )}
       <PipelineView loans={loans} />
+      {vesta.columns.length > 0 ? (
+        <details className="small muted">
+          <summary>Columns in this Vesta view ({vesta.columns.length})</summary>
+          <p>{vesta.columns.join(" · ")}</p>
+        </details>
+      ) : null}
     </>
   );
 }

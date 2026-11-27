@@ -76,6 +76,7 @@ export function PipelineView({ loans }: { loans: Loan[] }) {
           <div className="trow head">
             <span>Borrower · loan</span><span>Stage</span><span>Waiting on</span><span>Bot working it</span><span>Owner · last contact</span><span>Health</span>
           </div>
+          {rows.length === 0 ? <div className="trow" style={{ display: "block" }}><span className="muted">No files to show.</span></div> : null}
           {rows.map((l) => (
             <Link key={l.id} href={`/loans/${l.id}`} className="trow" aria-label={`Open loan file for ${l.name}`}>
               <span className="cell-col">

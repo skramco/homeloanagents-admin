@@ -1,6 +1,7 @@
 // Server-side only: uses the Supabase service role key.
+import { cache } from "react";
 import type { Loan } from "./types";
-import { SAMPLE_LOANS } from "./sample-data";
+import { loadVestaPipeline, type VestaPipelineResult } from "./vesta/pipeline";
 import { getSupabaseAdmin, type CallLeadRow } from "./supabase/admin";
 
 export function supabaseConfigured(): boolean {
@@ -49,13 +50,15 @@ export function callLeadToLoan(row: CallLeadRow): Loan {
   };
 }
 
-export type LoadedLoans = { loans: Loan[]; liveCount: number; liveError: string | null };
+export type LoadedLoans = {
+  loans: Loan[];
+  liveCount: number;
+  liveError: string | null;
+  vesta: VestaPipelineResult;
+};
 
-/** Real voice-agent leads (newest first) followed by the sample files. */
-export async function loadLoans(): Promise<LoadedLoans> {
-  if (!supabaseConfigured()) {
-    return { loans: SAMPLE_LOANS, liveCount: 0, liveError: null };
-  }
+async function loadCallLeads(): Promise<{ loans: Loan[]; error: string | null }> {
+  if (!supabaseConfigured()) return { loans: [], error: null };
   try {
     const { data, error } = await getSupabaseAdmin()
       .from("call_leads")
@@ -63,13 +66,18 @@ export async function loadLoans(): Promise<LoadedLoans> {
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw error;
-    const live = (data ?? []).map((r) => callLeadToLoan(r as CallLeadRow));
-    return { loans: [...live, ...SAMPLE_LOANS], liveCount: live.length, liveError: null };
+    return { loans: (data ?? []).map((r) => callLeadToLoan(r as CallLeadRow)), error: null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return { loans: SAMPLE_LOANS, liveCount: 0, liveError: message };
+    return { loans: [], error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
+
+/** Real voice-agent leads (newest first), then real loan files from the Vesta pipeline view. */
+// cache(): the layout and the page both load loans; this makes it one Vesta call per request.
+export const loadLoans = cache(async (): Promise<LoadedLoans> => {
+  const [leads, vesta] = await Promise.all([loadCallLeads(), loadVestaPipeline()]);
+  return { loans: [...leads.loans, ...vesta.loans], liveCount: leads.loans.length, liveError: leads.error, vesta };
+});
 
 export async function loadLoan(id: string): Promise<Loan | null> {
   const { loans } = await loadLoans();
