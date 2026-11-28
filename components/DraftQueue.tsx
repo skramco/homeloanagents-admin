@@ -8,9 +8,6 @@ import type { SavedReviews } from "@/lib/reviews";
 import type { Draft, DraftResult, TaskType } from "@/lib/drafts";
 import { useWorkspace, type ReviewOutcome, type ReviewTally } from "./Workspace";
 
-const PLACEHOLDER_FOOTER =
-  "HomeLoanAgents is a DBA of United Fidelity Funding · NMLS [UFF ID] · Mark NMLS [ID] · NMLS Consumer Access · CA/TX/FL licenses · Equal Housing Opportunity";
-
 /** What the server says about sending, for the banner and the footer preview. */
 export type SendInfo = { enabled: boolean; footer: string | null; smsFooter: string; testOnly: boolean };
 
@@ -69,7 +66,10 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
       <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <span className="small muted">
           <span className="pill info" style={{ marginRight: 6 }}>{d.taskType}</span>
-          <span className="bot-name">{d.bot}</span> · {d.channel} to{" "}
+          <span className="bot-name">{d.bot}</span>
+          {d.writtenBy === "grok" ? <span className="pill info" style={{ marginLeft: 6 }}>Written by Grok</span> : null}
+          {d.writtenBy === "template" && d.writtenNote ? <span className="pill muted" style={{ marginLeft: 6 }} title={d.writtenNote}>Template ({d.writtenNote})</span> : null}{" "}
+          · {d.channel} to{" "}
           {d.loanId ? <Link href={`/loans/${d.loanId}`}>{loanName}</Link> : "unmatched sender"} {d.to ? `(${d.to})` : ""} · reviewer: {needsMark ? "Mark" : d.reviewer}
           {mine ? <span className="yours">Yours</span> : null}
         </span>
@@ -94,7 +94,7 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
         ) : (
           <span>{text}</span>
         )}
-        {d.channel === "Email" ? <span className="footer-note">{send.footer ?? `${PLACEHOLDER_FOOTER} (set COMPLIANCE_FOOTER)`}</span> : <span className="footer-note">{send.smsFooter}</span>}
+        {d.channel === "Email" ? (send.footer && !text.includes(send.footer) ? <span className="footer-note">{send.footer}</span> : /NMLS/.test(text) && /Equal Housing/i.test(text) ? null : <span className="footer-note" style={{ color: "#A3261B" }}>No compliance footer in this email yet, so it won’t send.</span>) : <span className="footer-note">{send.smsFooter}</span>}
       </div>
       {d.note ? <span style={{ fontSize: 13, color: "#A3261B" }}>{d.note}</span> : null}
       {error ? <span role="alert" style={{ fontSize: 13, color: "#A3261B" }}>{error}</span> : null}

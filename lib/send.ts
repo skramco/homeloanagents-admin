@@ -2,8 +2,9 @@
  * Sends an approved message: email through Resend, text through Twilio.
  *
  * Off unless SENDING_ENABLED=true. SEND_ONLY_TO (comma-separated emails or phone numbers)
- * limits who can receive anything, for testing on BETA loans. Every email carries the
- * compliance footer from COMPLIANCE_FOOTER, and nothing is emailed without it.
+ * limits who can receive anything, for testing on BETA loans. The bots' templates carry the
+ * compliance footer; an email whose final text lacks the NMLS and Equal Housing lines is not
+ * sent. COMPLIANCE_FOOTER, if set, is appended to any email that doesn't already include it.
  */
 
 import { emailKey, phoneKey } from "./support/match";
@@ -23,12 +24,17 @@ export type SendOutcome = { ok: true; provider: "resend" | "twilio"; providerId:
 export const sendingEnabled = () => process.env.SENDING_ENABLED === "true";
 
 /** Why a message can't be sent right now, or null if it can. */
-export function sendBlocker(channel: "email" | "sms", to: string | null): string | null {
+/** The footer check: the email as it goes out must name the NMLS and Equal Housing. */
+export function hasFooter(text: string): boolean {
+  return /\bNMLS\b/i.test(text) && /Equal Housing/i.test(text);
+}
+
+export function sendBlocker(channel: "email" | "sms", to: string | null, body = ""): string | null {
   if (!sendingEnabled()) return "Sending is switched off (SENDING_ENABLED).";
   if (!to) return "There's no address to send to.";
   if (channel === "email") {
     if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM) return "Resend isn't set up (RESEND_API_KEY, RESEND_FROM).";
-    if (!process.env.COMPLIANCE_FOOTER) return "The compliance footer isn't set (COMPLIANCE_FOOTER), so no email can go out.";
+    if (!hasFooter(finalText("email", body))) return "The email has no compliance footer (NMLS and Equal Housing lines), so it can't go out.";
   } else if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !(process.env.TWILIO_FROM || process.env.TWILIO_SUPPORT_NUMBER)) {
     return "Twilio isn't set up for sending (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM).";
   }
@@ -43,7 +49,10 @@ export function sendBlocker(channel: "email" | "sms", to: string | null): string
 
 /** The text exactly as it goes out, footer included. */
 export function finalText(channel: "email" | "sms", body: string): string {
-  if (channel === "email") return `${body.trim()}\n\n--\n${process.env.COMPLIANCE_FOOTER ?? ""}`.trim();
+  if (channel === "email") {
+    const footer = process.env.COMPLIANCE_FOOTER?.trim();
+    return footer && !body.includes(footer) ? `${body.trim()}\n\n--\n${footer}` : body.trim();
+  }
   const sms = process.env.COMPLIANCE_SMS_FOOTER ?? "Reply STOP to opt out.";
   return `${body.trim()} ${sms}`.trim();
 }
@@ -52,6 +61,24 @@ const toE164 = (v: string) => {
   const d = v.replace(/\D/g, "");
   return d.length === 10 ? `+1${d}` : d.length === 11 && d.startsWith("1") ? `+${d}` : v.startsWith("+") ? v : `+${d}`;
 };
+
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Simple branded HTML for the same text: paragraphs, list lines, and a small grey footer. */
+export function toHtml(text: string): string {
+  const [main, ...rest] = text.split(/\n--\n/);
+  const paras = main
+    .trim()
+    .split(/\n{2,}/)
+    .map((p) => {
+      const lines = p.split("\n");
+      if (lines.every((l) => /^\s*[-•]\s+/.test(l) || !l.trim())) return `<ul>${lines.filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^\s*[-•]\s+/, ""))}</li>`).join("")}</ul>`;
+      return `<p>${lines.map(esc).join("<br>")}</p>`;
+    })
+    .join("");
+  const foot = rest.length ? `<p style="margin-top:24px;font-size:12px;color:#626B79">${esc(rest.join("\n--\n").trim()).replace(/\n/g, "<br>")}</p>` : "";
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#0B0D12;max-width:600px">${paras}${foot}</div>`;
+}
 
 async function sendEmail(m: Outgoing): Promise<SendOutcome> {
   const headers: Record<string, string> = {};
@@ -73,6 +100,7 @@ async function sendEmail(m: Outgoing): Promise<SendOutcome> {
       reply_to: process.env.RESEND_REPLY_TO || supportMailbox(),
       subject: m.subject || "A note from HomeLoanAgents",
       text: finalText("email", m.body),
+      html: toHtml(finalText("email", m.body)),
       headers,
     }),
     cache: "no-store",

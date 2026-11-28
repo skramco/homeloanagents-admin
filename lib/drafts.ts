@@ -10,6 +10,7 @@ import { cache } from "react";
 import type { Loan, Role } from "./types";
 import { STAGES } from "./sample-data";
 import { getJson } from "./vesta/loan";
+import { grokConfigured, writeWithGrok } from "./grok";
 
 export type TaskType = "Daily update" | "Condition request" | "Support reply";
 export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request", "Support reply"];
@@ -40,6 +41,9 @@ export type Draft = {
   monitor: "passed" | "flagged" | "blocked";
   note?: string;
   inbound?: Inbound;
+  /** Who wrote the text: Grok, or the template (and why Grok's version wasn't used). */
+  writtenBy?: "grok" | "template";
+  writtenNote?: string;
 };
 
 export type DraftResult = { drafts: Draft[]; checked: number; skipped: number; errors: string[] };
@@ -193,8 +197,24 @@ export const loadLoanContexts = cache(async (loans: Loan[]): Promise<ContextResu
   return { contexts: results.filter((r): r is LoanContext => r !== null), checked: batch.length, skipped: active.length - batch.length, errors };
 });
 
+/**
+ * Has Grok rewrite each draft from its template, then runs the Compliance monitor again on
+ * what Grok wrote. Blocked drafts and drafts with no Grok key keep the template text.
+ */
+export async function polishDrafts(drafts: Draft[]): Promise<Draft[]> {
+  if (!grokConfigured()) return drafts.map((d) => ({ ...d, writtenBy: "template" as const }));
+  return mapLimit(drafts, CONCURRENCY, async (d) => {
+    if (d.monitor === "blocked") return { ...d, writtenBy: "template" as const };
+    const w = await writeWithGrok({ id: d.id, taskType: d.taskType, channel: d.channel, subject: d.subject, body: d.body, borrowerMessage: d.inbound?.text });
+    if (w.by !== "grok") return { ...d, writtenBy: "template" as const, writtenNote: w.why };
+    const pinned = d.monitor === "flagged" && /asked about pricing/.test(d.note ?? "");
+    return { ...d, subject: w.subject, body: w.body, writtenBy: "grok" as const, ...(pinned ? {} : { note: undefined, ...monitor(`${w.subject}\n${w.body}`) }) };
+  });
+}
+
 /** Drafts for active Vesta loans (not funded), up to MAX_LOANS per load. */
 export async function buildDrafts(loans: Loan[]): Promise<DraftResult> {
   const { contexts, checked, skipped, errors } = await loadLoanContexts(loans);
-  return { drafts: contexts.flatMap((c) => draftsForLoan(c.loan, c.vLoan, c.conditions)), checked, skipped, errors };
+  const drafts = await polishDrafts(contexts.flatMap((c) => draftsForLoan(c.loan, c.vLoan, c.conditions)));
+  return { drafts, checked, skipped, errors };
 }
