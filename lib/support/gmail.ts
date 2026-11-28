@@ -16,6 +16,12 @@ const MAX = 25;
 
 export const supportMailbox = () => process.env.SUPPORT_MAILBOX || "support@homeloanagents.com";
 
+/**
+ * Only mail addressed to this address is shown. The mailbox we read can also get other mail
+ * (it's a person's inbox that receives the support@ Google group), so everything else is skipped.
+ */
+export const SUPPORT_ADDRESS = "support@homeloanagents.com";
+
 function privateKey(): string | null {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
   if (!raw) return null;
@@ -80,12 +86,21 @@ export function emailOf(from: string): string {
   return (m ? m[1] : from).trim().toLowerCase();
 }
 
-/** Inbox email to the support mailbox from the last 7 days, newest first. */
+/** Whether a message was sent to support@ (To, Cc, Delivered-To, or the group's List-Id). */
+function toSupport(p: Part): boolean {
+  const addr = SUPPORT_ADDRESS.toLowerCase();
+  const list = addr.replace("@", ".");
+  const seen = ["To", "Cc", "Delivered-To", "X-Original-To", "List-Id"].map((h) => header(p, h).toLowerCase());
+  return seen.some((v) => v.includes(addr) || v.includes(`<${list}>`));
+}
+
+/** Email sent to support@homeloanagents.com in the last 7 days, newest first. */
 export async function loadSupportEmail(): Promise<InboundMessage[]> {
   const token = await accessToken();
   const user = encodeURIComponent(supportMailbox());
   const auth = { Authorization: `Bearer ${token}` };
-  const q = encodeURIComponent("in:inbox newer_than:7d -from:me -category:promotions");
+  const a = SUPPORT_ADDRESS;
+  const q = encodeURIComponent(`in:inbox newer_than:7d -from:me -category:promotions {to:${a} cc:${a} deliveredto:${a} list:${a}}`);
   const list = await fetch(`${GMAIL}/users/${user}/messages?maxResults=${MAX}&q=${q}`, { headers: auth, cache: "no-store" });
   if (!list.ok) throw new Error(`Gmail answered ${list.status}`);
   const ids = (((await list.json()) as { messages?: { id: string }[] }).messages ?? []).map((m) => m.id);
@@ -95,6 +110,7 @@ export async function loadSupportEmail(): Promise<InboundMessage[]> {
       if (!r.ok) return null;
       const m = (await r.json()) as { id: string; threadId: string; internalDate?: string; snippet?: string; payload?: Part };
       const p = m.payload ?? {};
+      if (!toSupport(p)) return null;
       const raw = findText(p, "text/plain") ?? (findText(p, "text/html") ?? m.snippet ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ");
       const from = header(p, "From");
       return {
