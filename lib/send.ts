@@ -9,6 +9,7 @@
 
 import { emailKey, phoneKey } from "./support/match";
 import { supportMailbox } from "./support/gmail";
+import { stripFooter } from "./grok";
 
 export type Outgoing = {
   id: string;
@@ -51,7 +52,8 @@ export function sendBlocker(channel: "email" | "sms", to: string | null, body = 
 export function finalText(channel: "email" | "sms", body: string): string {
   if (channel === "email") {
     const footer = process.env.COMPLIANCE_FOOTER?.trim();
-    return footer && !body.includes(footer) ? `${body.trim()}\n\n--\n${footer}` : body.trim();
+    // With a footer set, it appears exactly once, at the end, whatever the draft or an edit already has.
+    return footer ? `${stripFooter(body)}\n\n--\n${footer}` : body.trim();
   }
   const sms = process.env.COMPLIANCE_SMS_FOOTER ?? "Reply STOP to opt out.";
   return `${body.trim()} ${sms}`.trim();

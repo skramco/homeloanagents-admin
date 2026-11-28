@@ -94,7 +94,7 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
         ) : (
           <span>{text}</span>
         )}
-        {d.channel === "Email" ? (send.footer && !text.includes(send.footer) ? <span className="footer-note">{send.footer}</span> : /NMLS/.test(text) && /Equal Housing/i.test(text) ? null : <span className="footer-note" style={{ color: "#A3261B" }}>No compliance footer in this email yet, so it won’t send.</span>) : <span className="footer-note">{send.smsFooter}</span>}
+        {d.channel === "Email" ? (send.footer && !/NMLS/.test(text) ? <span className="footer-note">{send.footer}</span> : /NMLS/.test(text) && /Equal Housing/i.test(text) ? null : <span className="footer-note" style={{ color: "#A3261B" }}>No compliance footer in this email yet, so it won’t send.</span>) : <span className="footer-note">{send.smsFooter}</span>}
       </div>
       {d.note ? <span style={{ fontSize: 13, color: "#A3261B" }}>{d.note}</span> : null}
       {error ? <span role="alert" style={{ fontSize: 13, color: "#A3261B" }}>{error}</span> : null}

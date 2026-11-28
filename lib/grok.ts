@@ -47,6 +47,15 @@ function system(channel: "Email" | "Text"): string {
   ].join("\n");
 }
 
+/** The body without any footer: everything after a "--" line, or trailing NMLS / Equal Housing paragraphs. */
+export function stripFooter(body: string): string {
+  let text = body.replace(/\r\n/g, "\n").split(/\n\s*-{2,}\s*\n/)[0];
+  const paras = text.trim().split(/\n{2,}/);
+  while (paras.length > 1 && /NMLS|Equal Housing|Consumer Access|DBA of/i.test(paras[paras.length - 1])) paras.pop();
+  text = paras.join("\n\n");
+  return text.trim();
+}
+
 /** Every run of digits in the output must already be in the draft or the footer. */
 function addsNumbers(out: string, source: string): string | null {
   const known = new Set((source.match(/\d+/g) ?? []).map(String));
@@ -90,8 +99,9 @@ async function callGrok(input: Input): Promise<Written> {
     const extra = addsNumbers(`${subject}\n${body}`, source);
     if (extra) return fallback(`Grok ${extra}, which isn't in the loan data`);
     if (input.channel === "Text" && body.length > 480) return fallback("Grok's text was too long");
-    if (input.channel === "Email" && footer() && !body.includes(footer())) {
-      return { subject, body: `${body}\n\n--\n${footer()}`, by: "grok" };
+    if (input.channel === "Email" && footer()) {
+      // Grok often re-wraps or rewords the footer. Drop whatever it wrote and add ours exactly once.
+      return { subject, body: `${stripFooter(body)}\n\n--\n${footer()}`, by: "grok" };
     }
     return { subject, body, by: "grok" };
   } catch (err) {
@@ -112,7 +122,7 @@ export async function writeWithGrok(input: Input): Promise<Written> {
       if (w.by !== "grok") throw new Fallback(w);
       return w;
     },
-    ["grok-draft", key],
+    ["grok-draft-v2", key],
     { revalidate: 86400 },
   );
   try {
