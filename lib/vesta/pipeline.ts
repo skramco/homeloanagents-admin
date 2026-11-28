@@ -219,7 +219,10 @@ export async function loadVestaPipeline(): Promise<VestaPipelineResult> {
   const env = await currentVestaEnv();
   const c = vestaConfig(env);
   const empty = (error: string): VestaPipelineResult => ({ env, loans: [], total: null, error, columns: [] });
-  if (!isConfigured(c)) return empty(`Vesta ${env.toUpperCase()} is not configured. Add VESTA_${env.toUpperCase()}_API_TOKEN in Netlify.`);
+  if (!isConfigured(c)) {
+    const required = env === "prod" ? "VESTA_PROD_API_URL and VESTA_PROD_API_TOKEN" : "VESTA_BETA_API_TOKEN";
+    return empty(`Vesta ${env.toUpperCase()} is not configured. Add ${required} in Netlify.`);
+  }
   if (!c.pipelineViewId) return empty(`No ${env.toUpperCase()} pipeline view yet. Add VESTA_${env.toUpperCase()}_PIPELINE_VIEW_ID in Netlify.`);
 
   try {
