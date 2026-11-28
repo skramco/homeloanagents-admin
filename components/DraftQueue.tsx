@@ -8,8 +8,11 @@ import type { SavedReviews } from "@/lib/reviews";
 import type { Draft, DraftResult, TaskType } from "@/lib/drafts";
 import { useWorkspace, type ReviewOutcome, type ReviewTally } from "./Workspace";
 
-const FOOTER =
+const PLACEHOLDER_FOOTER =
   "HomeLoanAgents is a DBA of United Fidelity Funding · NMLS [UFF ID] · Mark NMLS [ID] · NMLS Consumer Access · CA/TX/FL licenses · Equal Housing Opportunity";
+
+/** What the server says about sending, for the banner and the footer preview. */
+export type SendInfo = { enabled: boolean; footer: string | null; smsFooter: string; testOnly: boolean };
 
 // Path to automatic: 95% approved without edits over the last 50 drafts of a type.
 const WINDOW = 50;
@@ -37,7 +40,7 @@ function Readiness({ type, t }: { type: string; t?: ReviewTally }) {
   );
 }
 
-function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
+function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; send: SendInfo; saved: boolean }) {
   const ws = useWorkspace();
   const [text, setText] = useState(d.body);
   const [editing, setEditing] = useState(false);
@@ -54,7 +57,7 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
         setError(r.error);
         return;
       }
-      ws.review(d.id, d.taskType, outcome, message);
+      ws.review(d.id, d.taskType, outcome, r.sent ? `${message} Sent to ${d.to}.` : r.note ? `${message} ${r.note}` : message);
       if (r.saved) router.refresh();
     });
   const mine = d.reviewer === ws.role || (d.monitor === "flagged" && ws.role === "Mark");
@@ -91,7 +94,7 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
         ) : (
           <span>{text}</span>
         )}
-        {d.channel === "Email" ? <span className="footer-note">{FOOTER}</span> : null}
+        {d.channel === "Email" ? <span className="footer-note">{send.footer ?? `${PLACEHOLDER_FOOTER} (set COMPLIANCE_FOOTER)`}</span> : <span className="footer-note">{send.smsFooter}</span>}
       </div>
       {d.note ? <span style={{ fontSize: 13, color: "#A3261B" }}>{d.note}</span> : null}
       {error ? <span role="alert" style={{ fontSize: 13, color: "#A3261B" }}>{error}</span> : null}
@@ -111,7 +114,7 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
             title={needsMark && ws.role !== "Mark" ? "Only Mark can approve pricing language" : undefined}
             onClick={() => decide(changed ? "edited" : "approved", changed ? "Edited and approved. The edit is saved as training data." : "Approved as written.")}
           >
-            {pending ? "Saving…" : changed ? "Approve with my edits" : "Approve"}
+            {pending ? (send.enabled ? "Sending…" : "Saving…") : `${changed ? "Approve with my edits" : "Approve"}${send.enabled && saved ? " and send" : ""}`}
           </button>
           <button type="button" className="btn" onClick={() => setEditing((e) => !e)}>{editing ? "Done editing" : "Edit"}</button>
           <button type="button" className="btn" onClick={() => setRejecting(true)}>Reject</button>
@@ -124,6 +127,7 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
 type QueueProps = {
   result: DraftResult;
   saved: SavedReviews;
+  send: SendInfo;
   loanNames: Record<string, string>;
   title?: string;
   intro?: string;
@@ -136,6 +140,7 @@ type QueueProps = {
 export function DraftQueue({
   result,
   saved,
+  send,
   loanNames,
   title = "Outbound review",
   intro = "The bots draft every borrower message from live Vesta data. Nothing goes out until a person approves it. Each approve, edit or reject counts toward that message type going automatic.",
@@ -156,9 +161,11 @@ export function DraftQueue({
         <span className="muted">{intro}</span>
       </header>
       <div className="banner warn">
-        {saved.available
-          ? "Approving doesn’t send anything yet. Every review is saved with who made it and the text as approved, and counts toward going automatic."
-          : `Approving doesn’t send anything yet, and reviews are only kept in this browser. ${saved.problem ?? ""}`}
+        {!saved.available
+          ? `Approving doesn’t send anything, and reviews are only kept in this browser. ${saved.problem ?? ""}`
+          : send.enabled
+            ? `Approving sends the message right away (email through Resend, texts through Twilio)${send.testOnly ? ", but only to the addresses on the SEND_ONLY_TO test list" : ""}. Every review is saved with who made it and the text as sent.`
+            : "Sending is off, so approving saves the decision without sending. Every review is saved with who made it and the text as approved."}
       </div>
       {status}
       {result.errors.length ? <div className="banner warn">Some loans couldn’t be drafted: {result.errors.slice(0, 3).join(" · ")}</div> : null}
@@ -193,7 +200,7 @@ export function DraftQueue({
 
       {open.length === 0 ? <div className="card ghost"><span className="muted">{empty}</span></div> : null}
       {open.map((d) => (
-        <DraftCard key={d.id} d={d} loanName={loanNames[d.loanId] ?? "Loan"} />
+        <DraftCard key={d.id} d={d} loanName={loanNames[d.loanId] ?? "Loan"} send={send} saved={saved.available} />
       ))}
     </div>
   );

@@ -106,6 +106,7 @@ export async function loadSupportEmail(): Promise<InboundMessage[]> {
         at: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : new Date().toISOString(),
         text: newestText(raw) || (m.snippet ?? ""),
         threadId: m.threadId,
+        messageId: header(p, "Message-ID") || header(p, "Message-Id") || undefined,
       };
     }),
   );
