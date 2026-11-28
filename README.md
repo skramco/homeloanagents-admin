@@ -29,7 +29,7 @@ Environment variables (see `.env.example`):
 | `ADMIN_SESSION_SECRET` | Signing session cookies. At least 32 characters: `openssl rand -hex 32` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional. Real voice-agent leads from the UFF Loans project. Same values as homeloanagents-web. |
 | `VESTA_BETA_API_TOKEN`, `VESTA_BETA_API_URL` | Vesta BETA. URL defaults to `https://uff.beta.vesta.com/api/v1`. |
-| `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Vesta PROD. URL defaults to `https://uff.vesta.com/api/v1`. |
+| `VESTA_PROD_API_TOKEN`, `VESTA_PROD_API_URL` | Both required to enable Vesta PROD. Set them for the Netlify Functions scope. |
 | `VESTA_BETA_PIPELINE_VIEW_ID`, `VESTA_PROD_PIPELINE_VIEW_ID` | Pipeline view the app lists. BETA defaults to the HLA view `fbbb992f-…`; PROD has none yet. |
 | `VESTA_BETA_USER_ID`, `VESTA_PROD_USER_ID` | Optional. Vesta admin user the pipeline query runs as; defaults match pro-api. |
 | `VESTA_API_VERSION` | Optional, defaults to `26.4`. |

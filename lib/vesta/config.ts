@@ -26,7 +26,6 @@ const DEFAULTS = {
     pipelineViewId: "fbbb992f-7e0d-4e76-bc94-f8a4120bd905",
   },
   prod: {
-    url: "https://uff.vesta.com/api/v1",
     userId: "0195d96c-2c76-7ca7-9cc8-455f328aa2c5",
     // No PROD HLA view yet: set VESTA_PROD_PIPELINE_VIEW_ID once it exists.
     pipelineViewId: "",
@@ -44,10 +43,12 @@ export type VestaConfig = {
 };
 
 export function vestaConfig(env: VestaEnv): VestaConfig {
-  const e = env === "prod" ? process.env.VESTA_PROD_API_URL : process.env.VESTA_BETA_API_URL;
+  const url = env === "prod"
+    ? process.env.VESTA_PROD_API_URL
+    : process.env.VESTA_BETA_API_URL || DEFAULTS.beta.url;
   const P = env === "prod" ? "VESTA_PROD_" : "VESTA_BETA_";
   const d = DEFAULTS[env];
-  const baseUrl = (e || d.url).replace(/\/+$/, "");
+  const baseUrl = url?.trim().replace(/\/+$/, "") || null;
   return {
     env,
     baseUrl,
@@ -66,7 +67,7 @@ export async function currentVestaEnv(): Promise<VestaEnv> {
   return (await cookies()).get(VESTA_ENV_COOKIE)?.value === "prod" ? "prod" : "beta";
 }
 
-/** Status for the UI. Never includes the token itself. */
+/** Status for the UI. Never includes endpoints or tokens. */
 export async function vestaStatus() {
   const env = await currentVestaEnv();
   const beta = vestaConfig("beta");
@@ -74,8 +75,8 @@ export async function vestaStatus() {
   return {
     env,
     apiVersion: process.env.VESTA_API_VERSION || DEFAULT_API_VERSION,
-    beta: { configured: isConfigured(beta), host: beta.baseUrl ? new URL(beta.baseUrl).host : null },
-    prod: { configured: isConfigured(prod), host: prod.baseUrl ? new URL(prod.baseUrl).host : null },
+    beta: { configured: isConfigured(beta) },
+    prod: { configured: isConfigured(prod) },
   };
 }
 export type VestaStatus = Awaited<ReturnType<typeof vestaStatus>>;

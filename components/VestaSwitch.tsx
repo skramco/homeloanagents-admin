@@ -35,9 +35,9 @@ export function VestaSwitch({ status, canUseProd }: { status: VestaStatus; canUs
       </form>
       <span className="small">
         {current.configured ? (
-          <>Calls go to <span className="mono">{current.host}</span>, API <span className="mono">v{status.apiVersion}</span></>
+          <>{status.env.toUpperCase()} configured, API <span className="mono">v{status.apiVersion}</span></>
         ) : (
-          <>Not configured. Add {status.env === "prod" ? "VESTA_PROD_API_TOKEN" : "VESTA_BETA_API_TOKEN"} in Netlify.</>
+          <>Not configured. Add {status.env === "prod" ? "VESTA_PROD_API_URL and VESTA_PROD_API_TOKEN" : "VESTA_BETA_API_TOKEN"} in Netlify.</>
         )}
       </span>
       {status.env === "prod" && <span className="small" style={{ fontWeight: 700 }}>Live loan files. Changes are real.</span>}
