@@ -11,6 +11,7 @@ import type { Loan, Role } from "./types";
 import { STAGES } from "./sample-data";
 import { getJson } from "./vesta/loan";
 import { grokConfigured, writeWithGrok, type Written } from "./grok";
+import { conditionDetail, conditionText, isBorrowerCondition, isClosed } from "./conditions";
 
 export type TaskType = "Daily update" | "Condition request" | "Support reply";
 export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request", "Support reply"];
@@ -99,13 +100,14 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
+/**
+ * The borrower's open conditions: Borrower-party only (as the borrower portal shows them), and
+ * not yet sent in. "NotReadyToApprove" is open; ReadyToApprove (with underwriting), Approved and
+ * cancelled are not.
+ */
 export function openConditions(list: unknown): Json[] {
   if (!Array.isArray(list)) return [];
-  return (list as Json[]).filter((c) => {
-    const s = String(c.conditionStatus ?? c.status ?? "");
-    // Open = not yet sent in by the borrower. "NotReadyToApprove" is open; ReadyToApprove, Approved and cancelled are not.
-    return !/^(ReadyToApprove|Approved|AutomaticallyCancelled|ManuallyCancelled|ManuallyCompleted|AutomaticallyCompleted)$/i.test(s);
-  });
+  return (list as Json[]).filter((c) => isBorrowerCondition(c) && !isClosed(c) && !/^(ReadyToApprove|ManuallyCompleted|AutomaticallyCompleted)$/i.test(String(c.conditionStatus ?? "")));
 }
 
 function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
@@ -119,15 +121,18 @@ function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
 
   // One email per open condition, in plain words, with how to resolve it.
   for (const c of conditions) {
-    const name = str(c.objectiveName) ?? str(c.taskTemplateName) ?? str(c.documentTypeName) ?? "an item";
-    const why = str(c.externalFacingMessage);
+    const d = conditionDetail(c);
+    const name = d.name;
     const timing = String(c.conditionTiming ?? "");
     const when = /PriorToDocs|PriorToClosing|PriorToFunding/.test(timing) ? "before we can prepare your closing documents" : "for the underwriter to approve your loan";
+    const what = conditionText(d);
     const body =
-      `Hi ${first},\n\nTo keep your loan moving, we need one thing from you: ${name}.\n\n` +
-      (why ? `${why}\n\n` : `We need this ${when}.\n\n`) +
-      `How to send it: upload it in your HomeLoanAgents portal, or reply to this email with it attached. ` +
-      `If you're not sure what counts, reply and we'll help.\n\n${SIGN_OFF}`;
+      `Hi ${first},\n\nTo keep your loan moving, we need one thing from you: ${name}. We need it ${when}.\n\n` +
+      (what ? `${what}\n\n` : "") +
+      (d.needsDocument
+        ? "How to send it: upload it in your HomeLoanAgents portal, or reply to this email with it attached."
+        : "How to take care of it: do it in your HomeLoanAgents portal, or reply to this email.") +
+      ` If you're not sure what counts, reply and we'll help.\n\n${SIGN_OFF}`;
     drafts.push({
       id: `cond-${vestaId}-${String(c.id ?? c.taskTemplateId ?? name).slice(0, 40)}`,
       loanId: loan.id,
@@ -152,7 +157,7 @@ function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
   if (stage >= 6 && cd) next.push(`Your Closing Disclosure goes out by ${cd}.`);
   if (close) next.push(`We're working toward closing on ${close}.`);
   const needs = conditions.length
-    ? `What we need from you:\n${conditions.map((c) => `- ${str(c.objectiveName) ?? str(c.taskTemplateName) ?? "An item"}`).join("\n")}\nWe've sent a separate note on each with how to send it.`
+    ? `What we need from you:\n${conditions.map((c) => `- ${conditionDetail(c).name}`).join("\n")}\nWe've sent a separate note on each with how to send it.`
     : "What we need from you: nothing right now.";
   const body =
     `Hi ${first},\n\nHere's your loan update for ${today()}.\n\n` +
