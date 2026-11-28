@@ -9,7 +9,7 @@
 
 import { emailKey, phoneKey } from "./support/match";
 import { supportMailbox } from "./support/gmail";
-import { stripFooter } from "./grok";
+import { grokConfigured, stripFooter } from "./grok";
 
 export type Outgoing = {
   id: string;
@@ -142,5 +142,6 @@ export function sendInfo() {
     footer: process.env.COMPLIANCE_FOOTER || null,
     smsFooter: process.env.COMPLIANCE_SMS_FOOTER ?? "Reply STOP to opt out.",
     testOnly: Boolean((process.env.SEND_ONLY_TO ?? "").trim()),
+    grok: grokConfigured(),
   };
 }

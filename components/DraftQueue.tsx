@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { retrySend, submitReview } from "@/app/(app)/review-actions";
+import { retrySend, submitReview, writeWithGrokNow } from "@/app/(app)/review-actions";
 import type { SavedReviews } from "@/lib/reviews";
 import type { Draft, DraftResult, TaskType } from "@/lib/drafts";
 import { useWorkspace, type ReviewOutcome, type ReviewTally } from "./Workspace";
 
 /** What the server says about sending, for the banner and the footer preview. */
-export type SendInfo = { enabled: boolean; footer: string | null; smsFooter: string; testOnly: boolean };
+export type SendInfo = { enabled: boolean; footer: string | null; smsFooter: string; testOnly: boolean; grok: boolean };
 
 // Path to automatic: 95% approved without edits over the last 50 drafts of a type.
 const WINDOW = 50;
@@ -37,7 +37,9 @@ function Readiness({ type, t }: { type: string; t?: ReviewTally }) {
   );
 }
 
-function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; send: SendInfo; saved: boolean }) {
+const canWrite = (d: Draft) => d.monitor !== "blocked" && d.writtenBy !== "grok";
+
+function DraftCard({ d, loanName, send, saved, writing, onWrite }: { d: Draft; loanName: string; send: SendInfo; saved: boolean; writing: boolean; onWrite: () => void }) {
   const ws = useWorkspace();
   const [text, setText] = useState(d.body);
   const [editing, setEditing] = useState(false);
@@ -74,7 +76,7 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
           <span className="pill info" style={{ marginRight: 6 }}>{d.taskType}</span>
           <span className="bot-name">{d.bot}</span>
           {d.writtenBy === "grok" ? <span className="pill info" style={{ marginLeft: 6 }}>Written by Grok</span> : null}
-          {d.writtenBy === "template" && d.writtenNote ? <span className="pill muted" style={{ marginLeft: 6 }} title={d.writtenNote}>Template ({d.writtenNote})</span> : null}{" "}
+          {d.writtenBy === "template" ? <span className="pill muted" style={{ marginLeft: 6 }} title={d.writtenNote}>{d.writtenNote && d.writtenNote !== "Not written by Grok yet" ? `Template (${d.writtenNote})` : "Template"}</span> : null}{" "}
           · {d.channel} to{" "}
           {d.loanId ? <Link href={`/loans/${d.loanId}`}>{loanName}</Link> : "unmatched sender"} {d.to ? `(${d.to})` : ""} · reviewer: {needsMark ? "Mark" : d.reviewer}
           {mine ? <span className="yours">Yours</span> : null}
@@ -122,6 +124,11 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
           >
             {pending ? (send.enabled ? "Sending…" : "Saving…") : `${changed ? "Approve with my edits" : "Approve"}${send.enabled && saved ? " and send" : ""}`}
           </button>
+          {send.grok && canWrite(d) && !changed ? (
+            <button type="button" className="btn" disabled={writing || pending} onClick={onWrite}>
+              {writing ? <><span className="spinner" aria-hidden /> Grok is writing…</> : "Write with Grok"}
+            </button>
+          ) : null}
           <button type="button" className="btn" onClick={() => setEditing((e) => !e)}>{editing ? "Done editing" : "Edit"}</button>
           <button type="button" className="btn" onClick={() => setRejecting(true)}>Reject</button>
         </div>
@@ -192,10 +199,40 @@ export function DraftQueue({
 }: QueueProps) {
   const ws = useWorkspace();
   const [type, setType] = useState<TaskType | "all">("all");
+  // Drafts Grok wrote on request during this visit, by id. Page loads only show cached ones.
+  const [written, setWritten] = useState<Record<string, Draft>>({});
+  const [writing, setWriting] = useState<Record<string, boolean>>({});
+  const [progress, setProgress] = useState<string | null>(null);
+  const drafts = result.drafts.map((d) => written[d.id] ?? d);
+  const write = async (batch: Draft[]): Promise<boolean> => {
+    setWriting((w) => ({ ...w, ...Object.fromEntries(batch.map((d) => [d.id, true])) }));
+    try {
+      const r = await writeWithGrokNow(batch);
+      if (!r.ok) {
+        ws.flash(r.error);
+        return false;
+      }
+      setWritten((w) => ({ ...w, ...Object.fromEntries(r.drafts.map((d) => [d.id, d])) }));
+      return true;
+    } catch (err) {
+      ws.flash(actionError(err));
+      return false;
+    } finally {
+      setWriting((w) => ({ ...w, ...Object.fromEntries(batch.map((d) => [d.id, false])) }));
+    }
+  };
+  const writeAll = async (list: Draft[]) => {
+    const todo = list.filter(canWrite);
+    for (let i = 0; i < todo.length; i += 5) {
+      setProgress(`Grok is writing ${Math.min(i + 5, todo.length)} of ${todo.length}…`);
+      if (!(await write(todo.slice(i, i + 5)))) break;
+    }
+    setProgress(null);
+  };
   const isDone = (id: string) => Boolean(ws.done[id] || saved.reviewed[id]);
   const tallies = saved.available ? saved.tallies : ws.reviews;
-  const open = result.drafts.filter((d) => !isDone(d.id) && (type === "all" || d.taskType === type));
-  const types = Array.from(new Set(result.drafts.map((d) => d.taskType)));
+  const open = drafts.filter((d) => !isDone(d.id) && (type === "all" || d.taskType === type));
+  const types = Array.from(new Set(drafts.map((d) => d.taskType)));
   return (
     <div className="stack">
       <header className="page-head">
@@ -222,10 +259,10 @@ export function DraftQueue({
       </section>
 
       <div className="btn-row" style={{ alignItems: "center" }}>
-        <button type="button" className="chip" aria-pressed={type === "all"} onClick={() => setType("all")}>All {result.drafts.filter((d) => !isDone(d.id)).length}</button>
+        <button type="button" className="chip" aria-pressed={type === "all"} onClick={() => setType("all")}>All {drafts.filter((d) => !isDone(d.id)).length}</button>
         {types.map((t) => (
           <button key={t} type="button" className="chip" aria-pressed={type === t} onClick={() => setType(t)}>
-            {t} {result.drafts.filter((d) => d.taskType === t && !isDone(d.id)).length}
+            {t} {drafts.filter((d) => d.taskType === t && !isDone(d.id)).length}
           </button>
         ))}
         <span className="small muted">
@@ -259,9 +296,17 @@ export function DraftQueue({
         </details>
       ) : null}
 
+      {send.grok && open.some(canWrite) ? (
+        <div className="btn-row" style={{ alignItems: "center" }}>
+          <button type="button" className="btn" disabled={Boolean(progress)} onClick={() => void writeAll(open)}>
+            {progress ? <><span className="spinner" aria-hidden /> {progress}</> : `Write ${open.filter(canWrite).length === 1 ? "it" : `all ${open.filter(canWrite).length}`} with Grok`}
+          </button>
+          <span className="small muted">Drafts start from the template. Grok rewrites them only when you ask, and keeps its wording for the day.</span>
+        </div>
+      ) : null}
       {open.length === 0 ? <div className="card ghost"><span className="muted">{empty}</span></div> : null}
       {open.map((d) => (
-        <DraftCard key={d.id} d={d} loanName={loanNames[d.loanId] ?? "Loan"} send={send} saved={saved.available} />
+        <DraftCard key={`${d.id}:${d.writtenBy}`} d={d} loanName={loanNames[d.loanId] ?? "Loan"} send={send} saved={saved.available} writing={Boolean(writing[d.id])} onWrite={() => void write([d])} />
       ))}
     </div>
   );
