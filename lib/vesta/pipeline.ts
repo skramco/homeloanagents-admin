@@ -3,7 +3,7 @@
  *
  * Same call as pro-api's QueryPipelineViewAsync:
  *   POST {baseUrl}/pipeline/views
- *   { pipelineViewId, userId, limit, offset, filters: [] }
+ *   { pipelineViewId, userId, limit (max 50), offset, sortColumnId?, sortDirection?, filters: [] }
  * The response has `columns` (id + name) and `loans` (id + positional `columns` values),
  * so each value is read by its column name, as pro-api's PipelineLoanMapper does.
  */
@@ -30,7 +30,9 @@ export type VestaPipelineResult = {
   columns: string[];
 };
 
-const PAGE_SIZE = 100;
+// Vesta rejects limit > 50 ("Limit cannot be greater than 50"), so page through.
+const PAGE_SIZE = 50;
+const MAX_PAGES = 10; // up to 500 loans
 
 // ── cell readers ──
 
@@ -226,28 +228,44 @@ export async function loadVestaPipeline(): Promise<VestaPipelineResult> {
   if (!c.pipelineViewId) return empty(`No ${env.toUpperCase()} pipeline view yet. Add VESTA_${env.toUpperCase()}_PIPELINE_VIEW_ID in Netlify.`);
 
   try {
-    const res = await vestaFetch(
-      "/pipeline/views",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pipelineViewId: c.pipelineViewId, userId: c.userId, limit: PAGE_SIZE, offset: 0, filters: [] }),
-        signal: AbortSignal.timeout(20_000),
-      },
-      env,
-    );
-    if (!res.ok) {
-      const body = (await res.text()).slice(0, 300).replace(/\s+/g, " ");
-      return empty(`Vesta ${env.toUpperCase()} answered ${res.status}${body ? `: ${body}` : ""}`);
+    let columns: PipelineColumn[] | null = null;
+    const rows: PipelineLoanRow[] = [];
+    let total: number | null = null;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const body: Record<string, unknown> = {
+        pipelineViewId: c.pipelineViewId,
+        userId: c.userId,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        filters: [],
+      };
+      if (c.sortColumnId) {
+        body.sortColumnId = c.sortColumnId;
+        body.sortDirection = "Ascending";
+      }
+      const res = await vestaFetch(
+        "/pipeline/views",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) },
+        env,
+      );
+      if (!res.ok) {
+        const text = (await res.text()).slice(0, 300).replace(/\s+/g, " ");
+        return empty(`Vesta ${env.toUpperCase()} answered ${res.status}${text ? `: ${text}` : ""}`);
+      }
+      const data = (await res.json()) as PipelineResponse;
+      columns ??= data.columns ?? [];
+      total = data.pagination?.totalNumberOfRecords ?? total;
+      const got = data.loans ?? [];
+      rows.push(...got);
+      if (got.length < PAGE_SIZE || (total !== null && rows.length >= total)) break;
     }
-    const data = (await res.json()) as PipelineResponse;
-    const names = (data.columns ?? []).map((col) => col.name ?? "");
+    const names = (columns ?? []).map((col) => col.name ?? "");
     const colIndex = new Map<string, number>();
     names.forEach((n, i) => {
       if (n) colIndex.set(n.toLowerCase(), i);
     });
-    const loans = (data.loans ?? []).map((r) => rowToLoan(r, colIndex)).filter((l): l is Loan => l !== null);
-    return { env, loans, total: data.pagination?.totalNumberOfRecords ?? loans.length, error: null, columns: names.filter(Boolean) };
+    const loans = rows.map((r) => rowToLoan(r, colIndex)).filter((l): l is Loan => l !== null);
+    return { env, loans, total: total ?? loans.length, error: null, columns: names.filter(Boolean) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return empty(`Could not reach Vesta ${env.toUpperCase()} (${message}).`);
