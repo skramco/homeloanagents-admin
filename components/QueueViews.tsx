@@ -201,7 +201,7 @@ export function BotsView({ loans }: { loans: Loan[] }) {
             <span>Area</span><span>Task</span><span>Bot</span><span>Reviewer</span><span>Borrower gets</span><span>Status</span>
           </div>
           {BOT_TASKS.map((t, i) => {
-            const tally = ws.reviews[t.area === "Daily update" ? "Daily update" : t.task.startsWith("One email per open condition") ? "Condition request" : ""];
+            const tally = ws.reviews[t.area === "Daily update" ? "Daily update" : t.task.startsWith("One email per open condition") ? "Condition request" : t.area === "Questions" ? "Support reply" : ""];
             return (
               <div key={i} className="line-item" style={{ gridTemplateColumns: "120px minmax(0, 2fr) 150px 130px minmax(0, 1.4fr) 110px", alignItems: "start" }}>
                 <span className="small muted">{t.area}</span>

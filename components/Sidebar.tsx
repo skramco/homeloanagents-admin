@@ -16,6 +16,7 @@ export function Sidebar({ loanCount }: { loanCount: number }) {
     { href: "/", label: "Pipeline", count: String(loanCount), hot: false },
     { href: "/approvals", label: "Mark’s approvals", count: String(openApprovals.length), hot: APPROVAL_OWNERS.includes(ws.role) && openApprovals.length > 0 },
     { href: "/outbound", label: "Outbound review", count: "drafts", hot: false },
+    { href: "/support", label: "Support inbox", count: "inbox", hot: false },
     { href: "/escalations", label: "Escalations", count: String(openEsc.length), hot: openEsc.some((e) => e.owners.includes(ws.role)) },
     { href: "/bots", label: "Bot monitor", count: "7 live", hot: false },
   ];

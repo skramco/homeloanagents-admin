@@ -6,19 +6,31 @@
  * the Outbound review screen is where a person approves, edits or rejects each one.
  */
 
+import { cache } from "react";
 import type { Loan, Role } from "./types";
 import { STAGES } from "./sample-data";
 import { getJson } from "./vesta/loan";
 
-export type TaskType = "Daily update" | "Condition request";
-export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request"];
+export type TaskType = "Daily update" | "Condition request" | "Support reply";
+export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request", "Support reply"];
+
+/** The borrower message a support reply answers. */
+export type Inbound = {
+  channel: "Email" | "Text";
+  from: string;
+  at: string;
+  subject?: string;
+  text: string;
+  /** How the sender was matched to the loan, or why they weren't. */
+  match: string;
+};
 
 export type Draft = {
   id: string;
   loanId: string;
   taskType: TaskType;
   bot: string;
-  channel: "Email";
+  channel: "Email" | "Text";
   reviewer: Role;
   to: string | null;
   subject: string;
@@ -26,18 +38,19 @@ export type Draft = {
   /** Compliance monitor result for the draft as written. */
   monitor: "passed" | "flagged" | "blocked";
   note?: string;
+  inbound?: Inbound;
 };
 
 export type DraftResult = { drafts: Draft[]; checked: number; skipped: number; errors: string[] };
 
-type Json = Record<string, unknown>;
-const isObj = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
-const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+export type Json = Record<string, unknown>;
+export const isObj = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
+export const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 const MAX_LOANS = 25;
 const CONCURRENCY = 5;
-const today = () => new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/Los_Angeles" }).format(new Date());
-const fmtDate = (v: unknown) => {
+export const today = () => new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/Los_Angeles" }).format(new Date());
+export const fmtDate = (v: unknown) => {
   const s = str(v);
   if (!s) return null;
   const d = new Date(s.length === 10 ? `${s}T12:00:00Z` : s);
@@ -45,7 +58,7 @@ const fmtDate = (v: unknown) => {
 };
 
 /** Plain-language description of each pipeline stage, for borrowers. */
-const STAGE_PLAIN = [
+export const STAGE_PLAIN = [
   "We have your contact details and are getting your application started.",
   "Your portal account is set up and ready for your application.",
   "We have your application and are reviewing it.",
@@ -57,12 +70,12 @@ const STAGE_PLAIN = [
   "Your loan has funded.",
 ];
 
-const SIGN_OFF = "Reply to this email with any questions, or write to support@homeloanagents.com. A real person reads every reply.\n\nThe HomeLoanAgents team";
+export const SIGN_OFF = "Reply to this email with any questions, or write to support@homeloanagents.com. A real person reads every reply.\n\nThe HomeLoanAgents team";
 
 /** Words the Compliance monitor routes to Mark instead of a processor. */
 const PRICING_WORDS = /\b(rate|apr|points?|payment|lock(ed)?|\d+(\.\d+)?\s?%)\b/i;
 
-function monitor(text: string): Pick<Draft, "monitor" | "note"> {
+export function monitor(text: string): Pick<Draft, "monitor" | "note"> {
   if (PRICING_WORDS.test(text)) return { monitor: "flagged", note: "Mentions pricing or a payment: Mark must approve it." };
   return { monitor: "passed" };
 }
@@ -81,7 +94,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
-function openConditions(list: unknown): Json[] {
+export function openConditions(list: unknown): Json[] {
   if (!Array.isArray(list)) return [];
   return (list as Json[]).filter((c) => {
     const s = String(c.conditionStatus ?? c.status ?? "");
@@ -157,20 +170,30 @@ function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
   return drafts;
 }
 
-/** Drafts for active Vesta loans (not funded), up to MAX_LOANS per load. */
-export async function buildDrafts(loans: Loan[]): Promise<DraftResult> {
+/** An active Vesta loan with its full record and open conditions, as fetched for drafting. */
+export type LoanContext = { loan: Loan; vLoan: Json; conditions: Json[] };
+export type ContextResult = { contexts: LoanContext[]; checked: number; skipped: number; errors: string[] };
+
+/** Active Vesta loans (not funded), up to MAX_LOANS, fetched once per request. */
+export const loadLoanContexts = cache(async (loans: Loan[]): Promise<ContextResult> => {
   const active = loans.filter((l) => l.source === "vesta" && l.stage < 8);
   const batch = active.slice(0, MAX_LOANS);
   const errors: string[] = [];
-  const results = await mapLimit(batch, CONCURRENCY, async (loan) => {
+  const results = await mapLimit(batch, CONCURRENCY, async (loan): Promise<LoanContext | null> => {
     const id = encodeURIComponent(loan.id.replace(/^v-/, ""));
     try {
       const [vLoan, conds] = await Promise.all([getJson(`/loans/${id}`), getJson(`/loans/${id}/objective-conditions`)]);
-      return draftsForLoan(loan, isObj(vLoan) ? vLoan : {}, openConditions(conds));
+      return { loan, vLoan: isObj(vLoan) ? vLoan : {}, conditions: openConditions(conds) };
     } catch (err) {
       errors.push(`${loan.name}: ${err instanceof Error ? err.message : String(err)}`);
-      return [];
+      return null;
     }
   });
-  return { drafts: results.flat(), checked: batch.length, skipped: active.length - batch.length, errors };
+  return { contexts: results.filter((r): r is LoanContext => r !== null), checked: batch.length, skipped: active.length - batch.length, errors };
+});
+
+/** Drafts for active Vesta loans (not funded), up to MAX_LOANS per load. */
+export async function buildDrafts(loans: Loan[]): Promise<DraftResult> {
+  const { contexts, checked, skipped, errors } = await loadLoanContexts(loans);
+  return { drafts: contexts.flatMap((c) => draftsForLoan(c.loan, c.vLoan, c.conditions)), checked, skipped, errors };
 }
