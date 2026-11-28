@@ -102,7 +102,12 @@ function DraftCard({ d, loanName, send, saved, writing, onWrite }: { d: Draft; l
         ) : (
           <span>{text}</span>
         )}
-        {d.channel === "Email" ? (send.footer && !/NMLS/.test(text) ? <span className="footer-note">{send.footer}</span> : /NMLS/.test(text) && /Equal Housing/i.test(text) ? null : <span className="footer-note" style={{ color: "#A3261B" }}>No compliance footer in this email yet, so it won’t send.</span>) : <span className="footer-note">{send.smsFooter}</span>}
+        {d.channel === "Email" ? (
+          <details className="footer-note">
+            <summary style={{ cursor: "pointer" }}>Sent in the HomeLoanAgents email layout with the standard footer</summary>
+            <span style={{ whiteSpace: "pre-line" }}>{send.footer}</span>
+          </details>
+        ) : <span className="footer-note">{send.smsFooter}</span>}
       </div>
       {d.note ? <span style={{ fontSize: 13, color: "#A3261B" }}>{d.note}</span> : null}
       {error ? <span role="alert" style={{ fontSize: 13, color: "#A3261B" }}>{error}</span> : null}

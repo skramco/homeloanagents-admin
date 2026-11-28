@@ -3,13 +3,13 @@
  *
  * Off unless SENDING_ENABLED=true. SEND_ONLY_TO (comma-separated emails or phone numbers)
  * limits who can receive anything, for testing on BETA loans. The bots' templates carry the
- * compliance footer; an email whose final text lacks the NMLS and Equal Housing lines is not
- * sent. COMPLIANCE_FOOTER, if set, is appended to any email that doesn't already include it.
+ * Emails go out in the homeloanagents-web layout with its Section 2.2 footer (lib/email-template).
  */
 
 import { emailKey, phoneKey } from "./support/match";
 import { supportMailbox } from "./support/gmail";
 import { grokConfigured, stripFooter } from "./grok";
+import { emailHtml, emailText, transactionalFooterText } from "./email-template";
 
 export type Outgoing = {
   id: string;
@@ -48,13 +48,13 @@ export function sendBlocker(channel: "email" | "sms", to: string | null, body = 
   return null;
 }
 
-/** The text exactly as it goes out, footer included. */
+/**
+ * The text exactly as it goes out, footer included. Emails use the same layout and Section 2.2
+ * footer as homeloanagents-web: whatever footer the draft or an edit has is replaced, so it
+ * appears exactly once.
+ */
 export function finalText(channel: "email" | "sms", body: string): string {
-  if (channel === "email") {
-    const footer = process.env.COMPLIANCE_FOOTER?.trim();
-    // With a footer set, it appears exactly once, at the end, whatever the draft or an edit already has.
-    return footer ? `${stripFooter(body)}\n\n--\n${footer}` : body.trim();
-  }
+  if (channel === "email") return emailText(stripFooter(body));
   const sms = process.env.COMPLIANCE_SMS_FOOTER ?? "Reply STOP to opt out.";
   return `${body.trim()} ${sms}`.trim();
 }
@@ -63,24 +63,6 @@ const toE164 = (v: string) => {
   const d = v.replace(/\D/g, "");
   return d.length === 10 ? `+1${d}` : d.length === 11 && d.startsWith("1") ? `+${d}` : v.startsWith("+") ? v : `+${d}`;
 };
-
-const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-/** Simple branded HTML for the same text: paragraphs, list lines, and a small grey footer. */
-export function toHtml(text: string): string {
-  const [main, ...rest] = text.split(/\n--\n/);
-  const paras = main
-    .trim()
-    .split(/\n{2,}/)
-    .map((p) => {
-      const lines = p.split("\n");
-      if (lines.every((l) => /^\s*[-•]\s+/.test(l) || !l.trim())) return `<ul>${lines.filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^\s*[-•]\s+/, ""))}</li>`).join("")}</ul>`;
-      return `<p>${lines.map(esc).join("<br>")}</p>`;
-    })
-    .join("");
-  const foot = rest.length ? `<p style="margin-top:24px;font-size:12px;color:#626B79">${esc(rest.join("\n--\n").trim()).replace(/\n/g, "<br>")}</p>` : "";
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#0B0D12;max-width:600px">${paras}${foot}</div>`;
-}
 
 async function sendEmail(m: Outgoing): Promise<SendOutcome> {
   const headers: Record<string, string> = {};
@@ -102,7 +84,7 @@ async function sendEmail(m: Outgoing): Promise<SendOutcome> {
       reply_to: process.env.RESEND_REPLY_TO || supportMailbox(),
       subject: m.subject || "A note from HomeLoanAgents",
       text: finalText("email", m.body),
-      html: toHtml(finalText("email", m.body)),
+      html: emailHtml(m.subject || "A note from HomeLoanAgents", stripFooter(m.body)),
       headers,
     }),
     cache: "no-store",
@@ -139,7 +121,7 @@ export async function deliver(m: Outgoing): Promise<SendOutcome> {
 export function sendInfo() {
   return {
     enabled: sendingEnabled(),
-    footer: process.env.COMPLIANCE_FOOTER || null,
+    footer: transactionalFooterText().replace(/^--\n/, ""),
     smsFooter: process.env.COMPLIANCE_SMS_FOOTER ?? "Reply STOP to opt out.",
     testOnly: Boolean((process.env.SEND_ONLY_TO ?? "").trim()),
     grok: grokConfigured(),
