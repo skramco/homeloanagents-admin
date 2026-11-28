@@ -7,9 +7,12 @@ import { STAGE_SOURCES, STAGES } from "@/lib/sample-data";
 import { HEALTH_LABEL, botFeed, commsLog, coverage, firstName } from "@/lib/loan-view";
 import { useWorkspace } from "./Workspace";
 import { BotChat } from "./BotChat";
+import { VestaDetails } from "./VestaDetails";
+import type { VestaLoanDetail } from "@/lib/vesta/loan";
 
-type Tab = "overview" | "bots" | "comms" | "audit";
+type Tab = "vesta" | "overview" | "bots" | "comms" | "audit";
 const TABS: { id: Tab; label: string }[] = [
+  { id: "vesta", label: "Vesta details" },
   { id: "overview", label: "Status & conditions" },
   { id: "bots", label: "Bot activity" },
   { id: "comms", label: "Borrower communication" },
@@ -18,9 +21,10 @@ const TABS: { id: Tab; label: string }[] = [
 const CHANNELS = ["Text", "Email", "Voice agent call"] as const;
 const TEMPLATES = ["Status update", "Request missing items", "eSign reminder", "Book a call with a processor"];
 
-export function LoanFile({ loan: l }: { loan: Loan }) {
+export function LoanFile({ loan: l, vesta }: { loan: Loan; vesta?: VestaLoanDetail | null }) {
   const ws = useWorkspace();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(vesta ? "vesta" : "overview");
+  const tabs = vesta ? TABS : TABS.filter((t) => t.id !== "vesta");
   const [channel, setChannel] = useState<(typeof CHANNELS)[number]>("Text");
   const f = firstName(l.name);
   const feed = botFeed(l);
@@ -88,10 +92,12 @@ export function LoanFile({ loan: l }: { loan: Loan }) {
       <div className="row-wrap">
         <div className="stack" style={{ flex: "999 1 560px", minWidth: 0 }}>
           <div role="tablist" aria-label="Loan file sections" className="tabs">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button key={t.id} type="button" role="tab" className="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
             ))}
           </div>
+
+          {tab === "vesta" && vesta ? <VestaDetails d={vesta} /> : null}
 
           {tab === "overview" ? (
             <div className="stack">
