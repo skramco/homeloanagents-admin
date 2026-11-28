@@ -3,7 +3,8 @@
  *
  * The template is the source of truth: Grok may reword and format it, but if the result adds a
  * number or date that isn't in the template, drops the footer, or the call fails, the template
- * is used instead. Results are cached per draft for a day so a page load doesn't re-call Grok.
+ * is used instead. Grok is asked only when a person clicks Write with Grok; its answer is cached
+ * per draft for a day, and page loads show cached answers without calling Grok.
  * Every draft still goes through the Compliance monitor and a person's review.
  */
 
@@ -111,28 +112,41 @@ async function callGrok(input: Input): Promise<Written> {
   }
 }
 
-/** Grok's version of a template draft, cached for a day per draft and template text. */
-export async function writeWithGrok(input: Input): Promise<Written> {
-  if (!grokConfigured()) return { subject: input.subject, body: input.body, by: "template" };
+/**
+ * Grok's version of a template draft, cached for a day per draft and template text.
+ * With `peek`, only an answer Grok already gave is returned (null when there is none), so a
+ * page load never waits on Grok. Without it, Grok is asked if nothing is cached yet.
+ */
+export async function writeWithGrok(input: Input, opts: { peek: true }): Promise<Written | null>;
+export async function writeWithGrok(input: Input, opts?: { peek?: false }): Promise<Written>;
+export async function writeWithGrok(input: Input, opts?: { peek?: boolean }): Promise<Written | null> {
+  if (!grokConfigured()) return opts?.peek ? null : { subject: input.subject, body: input.body, by: "template" };
+  const peek = Boolean(opts?.peek);
   const key = createHash("sha256").update(JSON.stringify([MODEL(), footer(), input])).digest("hex").slice(0, 32);
-  // Cached either way, so Grok is asked once per draft per day (or when the loan facts change),
-  // not on every page load. Only a transport error (timeout, 5xx) is retried on the next load.
-  const cached = unstable_cache(
-    async () => {
-      const w = await callGrok(input);
-      if (w.by !== "grok" && /timed out|answered 5\d\d|answered 429/.test(w.why ?? "")) throw new Fallback(w);
-      return w;
-    },
-    ["grok-draft-v3", key],
-    { revalidate: 86400 },
-  );
+  // Both modes must share one cache entry. unstable_cache keys on the callback's source text,
+  // and the page and the server action are minified into different chunks, so the text differs
+  // between them. A fixed toString keeps the key the same everywhere.
+  // A peek that finds nothing throws Miss, and thrown results are never cached. A transport
+  // error (timeout, 5xx, 429) also throws, so the next "Write with Grok" tries again.
+  const run = async () => {
+    if (peek) throw new Miss();
+    const w = await callGrok(input);
+    if (w.by !== "grok" && /timed out|answered 5\d\d|answered 429/.test(w.why ?? "")) throw new Fallback(w);
+    return w;
+  };
+  run.toString = () => "grok-draft";
+  const cached = unstable_cache(run, ["grok-draft-v4", key], { revalidate: 86400 });
   try {
     return await cached();
   } catch (err) {
+    if (err instanceof Miss) return null;
     if (err instanceof Fallback) return err.written;
+    if (peek) return null;
     return { subject: input.subject, body: input.body, by: "template", why: "Grok failed" };
   }
 }
+
+class Miss extends Error {}
 
 class Fallback extends Error {
   constructor(public written: Written) {

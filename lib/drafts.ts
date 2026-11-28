@@ -10,7 +10,7 @@ import { cache } from "react";
 import type { Loan, Role } from "./types";
 import { STAGES } from "./sample-data";
 import { getJson } from "./vesta/loan";
-import { grokConfigured, writeWithGrok } from "./grok";
+import { grokConfigured, writeWithGrok, type Written } from "./grok";
 
 export type TaskType = "Daily update" | "Condition request" | "Support reply";
 export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request", "Support reply"];
@@ -197,19 +197,39 @@ export const loadLoanContexts = cache(async (loans: Loan[]): Promise<ContextResu
   return { contexts: results.filter((r): r is LoanContext => r !== null), checked: batch.length, skipped: active.length - batch.length, errors };
 });
 
+/** A draft rewritten by Grok, with the Compliance monitor run again on what Grok wrote. */
+function applyWritten(d: Draft, w: Written): Draft {
+  if (w.by !== "grok") return { ...d, writtenBy: "template", writtenNote: w.why };
+  const pinned = d.monitor === "flagged" && /asked about pricing/.test(d.note ?? "");
+  return {
+    ...d,
+    subject: w.subject,
+    body: w.body,
+    writtenBy: "grok",
+    ...(pinned ? {} : { note: undefined, ...monitor(`${w.subject}\n${w.body}`) }),
+  };
+}
+
+const grokInput = (d: Draft) => ({ id: d.id, taskType: d.taskType, channel: d.channel, subject: d.subject, body: d.body, borrowerMessage: d.inbound?.text });
+
 /**
- * Has Grok rewrite each draft from its template, then runs the Compliance monitor again on
- * what Grok wrote. Blocked drafts and drafts with no Grok key keep the template text.
+ * For a page load: swaps in the wording Grok already wrote (from cache) and leaves every other
+ * draft on its template. Never calls Grok, so the page doesn't wait on it.
  */
 export async function polishDrafts(drafts: Draft[]): Promise<Draft[]> {
   if (!grokConfigured()) return drafts.map((d) => ({ ...d, writtenBy: "template" as const }));
-  return mapLimit(drafts, CONCURRENCY, async (d) => {
+  return mapLimit(drafts, 10, async (d) => {
     if (d.monitor === "blocked") return { ...d, writtenBy: "template" as const };
-    const w = await writeWithGrok({ id: d.id, taskType: d.taskType, channel: d.channel, subject: d.subject, body: d.body, borrowerMessage: d.inbound?.text });
-    if (w.by !== "grok") return { ...d, writtenBy: "template" as const, writtenNote: w.why };
-    const pinned = d.monitor === "flagged" && /asked about pricing/.test(d.note ?? "");
-    return { ...d, subject: w.subject, body: w.body, writtenBy: "grok" as const, ...(pinned ? {} : { note: undefined, ...monitor(`${w.subject}\n${w.body}`) }) };
+    const w = await writeWithGrok(grokInput(d), { peek: true });
+    return w ? applyWritten(d, w) : { ...d, writtenBy: "template" as const, writtenNote: "Not written by Grok yet" };
   });
+}
+
+/** Has Grok write one template draft now (or returns its cached answer). */
+export async function writeDraft(d: Draft): Promise<Draft> {
+  if (d.monitor === "blocked" || d.writtenBy === "grok") return d;
+  if (!grokConfigured()) return { ...d, writtenBy: "template", writtenNote: "Grok isn't set up (XAI_API_KEY)" };
+  return applyWritten(d, await writeWithGrok(grokInput(d)));
 }
 
 /** Drafts for active Vesta loans (not funded), up to MAX_LOANS per load. */

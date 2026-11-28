@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySessionValue } from "@/lib/session";
-import { monitor, type Draft } from "@/lib/drafts";
+import { monitor, writeDraft, type Draft } from "@/lib/drafts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { missingTable, supabaseConfigured } from "@/lib/reviews";
 import { currentVestaEnv } from "@/lib/vesta/config";
@@ -117,4 +117,15 @@ export async function retrySend(id: string): Promise<ReviewResult> {
   }
   await db.from("outbound_messages").update({ send_status: "sent", send_error: null, provider: out.provider, provider_message_id: out.providerId, sent_at: now(), updated_at: now() }).eq("id", id);
   return { ok: true, saved: true, sent: true };
+}
+
+/**
+ * Has Grok write up to 5 drafts now, in parallel. A person asks for this from the review
+ * page, so page loads never wait on Grok. Answers are cached, so asking again is instant.
+ */
+export async function writeWithGrokNow(drafts: Draft[]): Promise<{ ok: true; drafts: Draft[] } | { ok: false; error: string }> {
+  const session = await verifySessionValue((await cookies()).get(SESSION_COOKIE)?.value);
+  if (!session) return { ok: false, error: "Your session ended. Sign in again." };
+  if (!Array.isArray(drafts) || drafts.length > 5) return { ok: false, error: "Ask for at most 5 drafts at a time." };
+  return { ok: true, drafts: await Promise.all(drafts.map((d) => writeDraft(d))) };
 }
