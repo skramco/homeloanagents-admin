@@ -93,6 +93,7 @@ export async function retrySend(id: string): Promise<ReviewResult> {
   const row = data as { id: string; outcome: string; channel: "email" | "sms"; to_address: string | null; subject: string | null; final_body: string | null; monitor: string; send_status: string; in_reply_to: { messageId?: string } | null };
   if (row.outcome === "rejected" || !row.final_body) return { ok: false, error: "This draft was rejected." };
   if (row.send_status === "sent") return { ok: false, error: "Already sent." };
+  if (row.send_status === "not_sending") return { ok: false, error: "This draft was rejected." };
   if ((row.monitor === "flagged" || monitor(`${row.subject ?? ""}\n${row.final_body}`).monitor === "flagged") && session.name !== "Mark") {
     return { ok: false, error: "This mentions pricing or a payment, so only Mark can send it." };
   }
@@ -102,7 +103,12 @@ export async function retrySend(id: string): Promise<ReviewResult> {
     await db.from("outbound_messages").update({ send_error: blocker, updated_at: now() }).eq("id", id);
     return { ok: true, saved: true, sent: false, note: `Not sent. ${blocker}` };
   }
-  const claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: now() }).eq("id", id).in("send_status", ["held", "failed"]).select("id");
+  let claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: now() }).eq("id", id).in("send_status", ["held", "failed"]).select("id");
+  if (!claim.error && !claim.data?.length) {
+    // A send that crashed mid-way stays "sending"; after 2 minutes it can be tried again.
+    const stale = new Date(Date.now() - 120000).toISOString();
+    claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: now() }).eq("id", id).eq("send_status", "sending").lt("updated_at", stale).select("id");
+  }
   if (claim.error || !claim.data?.length) return { ok: false, error: "It's already being sent." };
   const out = await deliver({ id, channel: row.channel, to: row.to_address!, subject: row.subject, body: row.final_body, inReplyTo: row.in_reply_to?.messageId ?? null });
   if (!out.ok) {

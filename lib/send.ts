@@ -126,8 +126,13 @@ async function sendText(m: Outgoing): Promise<SendOutcome> {
   return { ok: true, provider: "twilio", providerId: body.sid };
 }
 
-export function deliver(m: Outgoing): Promise<SendOutcome> {
-  return m.channel === "email" ? sendEmail(m) : sendText(m);
+/** Never throws: a network error or bad answer comes back as { ok: false }. */
+export async function deliver(m: Outgoing): Promise<SendOutcome> {
+  try {
+    return await (m.channel === "email" ? sendEmail(m) : sendText(m));
+  } catch (err) {
+    return { ok: false, error: `Couldn't reach ${m.channel === "email" ? "Resend" : "Twilio"}: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 /** Safe-to-show summary for the review screens (no keys). */

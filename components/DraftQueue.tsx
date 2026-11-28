@@ -49,7 +49,13 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
   const decide = (outcome: ReviewOutcome, message: string) =>
     start(async () => {
       setError(null);
-      const r = await submitReview(d, outcome, text, reason);
+      let r: Awaited<ReturnType<typeof submitReview>>;
+      try {
+        r = await submitReview(d, outcome, text, reason);
+      } catch (err) {
+        setError(actionError(err));
+        return;
+      }
       if (!r.ok) {
         setError(r.error);
         return;
@@ -124,6 +130,13 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
   );
 }
 
+/** A server action that throws (most often: the app was updated while this page was open). */
+function actionError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/Server Action|failed-to-find|deployment/i.test(msg)) return "The app was just updated. Reload the page and try again. Your review wasn’t saved.";
+  return `Something went wrong: ${msg}. Reload the page and check Recently reviewed before trying again.`;
+}
+
 function RetryButton({ id }: { id: string }) {
   const ws = useWorkspace();
   const router = useRouter();
@@ -136,7 +149,13 @@ function RetryButton({ id }: { id: string }) {
       disabled={pending}
       onClick={() =>
         start(async () => {
-          const r = await retrySend(id);
+          let r: Awaited<ReturnType<typeof retrySend>>;
+          try {
+            r = await retrySend(id);
+          } catch (err) {
+            ws.flash(actionError(err));
+            return;
+          }
           ws.flash(!r.ok ? r.error : r.sent ? "Sent." : r.note ?? "Not sent.");
           router.refresh();
         })

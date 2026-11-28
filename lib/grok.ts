@@ -115,14 +115,15 @@ async function callGrok(input: Input): Promise<Written> {
 export async function writeWithGrok(input: Input): Promise<Written> {
   if (!grokConfigured()) return { subject: input.subject, body: input.body, by: "template" };
   const key = createHash("sha256").update(JSON.stringify([MODEL(), footer(), input])).digest("hex").slice(0, 32);
-  // Only Grok's successful drafts are cached; a fallback is retried on the next load.
+  // Cached either way, so Grok is asked once per draft per day (or when the loan facts change),
+  // not on every page load. Only a transport error (timeout, 5xx) is retried on the next load.
   const cached = unstable_cache(
     async () => {
       const w = await callGrok(input);
-      if (w.by !== "grok") throw new Fallback(w);
+      if (w.by !== "grok" && /timed out|answered 5\d\d|answered 429/.test(w.why ?? "")) throw new Fallback(w);
       return w;
     },
-    ["grok-draft-v2", key],
+    ["grok-draft-v3", key],
     { revalidate: 86400 },
   );
   try {
