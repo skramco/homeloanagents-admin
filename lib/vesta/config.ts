@@ -24,11 +24,14 @@ const DEFAULTS = {
     userId: "6db9be88-0160-4a4b-8910-b0a14944f7ae",
     // HLA retail pipeline view Mark created in BETA on 2026-11-27.
     pipelineViewId: "fbbb992f-7e0d-4e76-bc94-f8a4120bd905",
+    // Sort column Mark uses for this view (ascending).
+    sortColumnId: "3dfbeb62-b29c-5645-b1da-26928a64e4f7",
   },
   prod: {
     userId: "0195d96c-2c76-7ca7-9cc8-455f328aa2c5",
     // No PROD HLA view yet: set VESTA_PROD_PIPELINE_VIEW_ID once it exists.
     pipelineViewId: "",
+    sortColumnId: "",
   },
 } as const;
 const DEFAULT_API_VERSION = "26.4";
@@ -40,6 +43,7 @@ export type VestaConfig = {
   apiVersion: string;
   userId: string;
   pipelineViewId: string | null;
+  sortColumnId: string | null;
 };
 
 export function vestaConfig(env: VestaEnv): VestaConfig {
@@ -56,6 +60,7 @@ export function vestaConfig(env: VestaEnv): VestaConfig {
     apiVersion: process.env.VESTA_API_VERSION || DEFAULT_API_VERSION,
     userId: process.env[`${P}USER_ID`] || d.userId,
     pipelineViewId: process.env[`${P}PIPELINE_VIEW_ID`] || d.pipelineViewId || null,
+    sortColumnId: process.env[`${P}SORT_COLUMN_ID`] || d.sortColumnId || null,
   };
 }
 
