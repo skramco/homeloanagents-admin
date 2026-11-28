@@ -99,3 +99,32 @@ export const ESCALATIONS: Escalation[] = [];
 
 /** Mark approves; Lorinn is backup only if MLO-licensed in CA, TX and FL. */
 export const APPROVAL_OWNERS: Role[] = ["Mark", "Lorinn"];
+
+/**
+ * Every task the bots draft for human review (from the design notes, Nov 28 2026).
+ * "drafting" = live in Outbound review now; "planned" = designed, not built yet.
+ */
+export type BotTask = { area: string; task: string; bot: string; reviewer: string; borrowerGets: string; status: "drafting" | "planned"; neverAutomatic?: boolean };
+export const BOT_TASKS: BotTask[] = [
+  { area: "Daily update", task: "Borrower-friendly update on every active loan, every day, even with no change", bot: "Concierge", reviewer: "File owner", borrowerGets: "Where you are, what we need, what's next", status: "drafting" },
+  { area: "Conditions", task: "One email per open condition with how to resolve it", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "We need X, here's why and how to send it", status: "drafting" },
+  { area: "Questions", task: "Answer texts and emails to support@ in the context of the borrower's loan", bot: "Concierge", reviewer: "Processor 1 or 2", borrowerGets: "A direct answer plus the next step", status: "planned" },
+  { area: "Stale files", task: "Spot files with no activity for 3+ days and recommend a next step", bot: "Dispatcher / oversight", reviewer: "File owner", borrowerGets: "Check-in with the one thing we need", status: "planned" },
+  { area: "Next steps", task: "Recommend the next action on every file", bot: "Dispatcher / oversight", reviewer: "File owner", borrowerGets: "Internal only", status: "planned" },
+  { area: "Disclosures", task: "Send the LE and intent to proceed within 3 business days of a complete application", bot: "Disclosure", reviewer: "Processor 1", borrowerGets: "Your Loan Estimate is ready and how to sign", status: "planned" },
+  { area: "Self-serve", task: "Resend disclosures, order the appraisal, request payoffs, take uploads", bot: "Concierge", reviewer: "Processor 1 or 2", borrowerGets: "Confirmation and when to expect the next step", status: "planned" },
+  { area: "Conditions", task: "Match uploaded docs to conditions; recommend clear or reject", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "Got it, or why it won't work and what to send", status: "planned" },
+  { area: "Conditions", task: "Flag docs that expire before closing", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "Please send your next paystub or statement", status: "planned" },
+  { area: "Conditions", task: "Re-run AUS after data changes and explain what moved", bot: "Processor / conditions", reviewer: "Processor 2, then Mark", borrowerGets: "Internal only", status: "planned" },
+  { area: "Pricing and lock", task: "Recommend when to lock unlocked files", bot: "Quote drafter", reviewer: "Mark", borrowerGets: "Mark recommends locking; reply YES", status: "planned", neverAutomatic: true },
+  { area: "Pricing and lock", task: "Warn on expiring locks and draft the extension with its cost", bot: "Quote drafter", reviewer: "Mark", borrowerGets: "Your lock ends on X; extension options", status: "planned", neverAutomatic: true },
+  { area: "Pricing and lock", task: "Draft change-of-circumstance redisclosures", bot: "Disclosure", reviewer: "Mark", borrowerGets: "Updated Loan Estimate to review and sign", status: "planned", neverAutomatic: true },
+  { area: "Third parties", task: "Order and chase VOE, title, flood cert, HOI binder, payoffs", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "What we ordered; anything we need from you", status: "planned" },
+  { area: "Third parties", task: "Review the appraisal; draft a reconsideration of value if low", bot: "Processor / conditions", reviewer: "Processor 2, then Mark", borrowerGets: "Your appraisal value and what it means", status: "planned" },
+  { area: "Third parties", task: "Status updates to the realtor and escrow; confirm closing and CD timing", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "Copy of the same update", status: "planned" },
+  { area: "Closing and funding", task: "Track the CD 3-day clock, balance the package, verify wires by callback", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "Sign your CD by X; we never email wire instructions", status: "planned", neverAutomatic: true },
+  { area: "Closing and funding", task: "Confirm funding and send welcome-to-servicing", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "Your loan funded; who services it", status: "planned" },
+  { area: "Compliance", task: "Pre-send check on every message (disclosures, NMLS footer, language, consent, DNC)", bot: "Compliance / QC monitor", reviewer: "Automatic gate", borrowerGets: "Footer on every message", status: "drafting" },
+  { area: "Compliance", task: "TRID and HMDA timing logs; score calls for tone and accuracy", bot: "Compliance / QC monitor", reviewer: "Mark", borrowerGets: "Internal only", status: "planned" },
+  { area: "Pipeline health", task: "Flag missed SLAs and quiet borrowers; daily digest per person", bot: "Dispatcher / oversight", reviewer: "Each person", borrowerGets: "Internal only", status: "planned" },
+];

@@ -19,14 +19,20 @@ type State = {
   paused: Record<string, boolean>;
   sent: Record<string, SentMessage[]>;
   chats: Record<string, ChatMessage[]>;
+  /** Review outcomes per task type: the record that decides when a task type can go automatic. */
+  reviews: Record<string, ReviewTally>;
 };
 
-const DEFAULT: State = { role: "Mark", done: {}, edited: 0, paused: {}, sent: {}, chats: {} };
+export type ReviewOutcome = "approved" | "edited" | "rejected";
+export type ReviewTally = { approved: number; edited: number; rejected: number; recent: ReviewOutcome[] };
+
+const DEFAULT: State = { role: "Mark", done: {}, edited: 0, paused: {}, sent: {}, chats: {}, reviews: {} };
 const KEY = "hla-loan-manager:v0";
 
 type Ctx = State & {
   setRole: (r: Role) => void;
   close: (id: string, outcome: string, opts?: { edited?: boolean }) => void;
+  review: (id: string, taskType: string, outcome: ReviewOutcome, message: string) => void;
   togglePause: (bot: string) => void;
   addSent: (loanId: string, m: SentMessage) => void;
   addChat: (key: string, msgs: ChatMessage[]) => void;
@@ -78,6 +84,19 @@ export function WorkspaceProvider({ children, signedInAs }: { children: ReactNod
       close: (id, outcome, opts) => {
         setState((s) => ({ ...s, done: { ...s.done, [id]: outcome }, edited: s.edited + (opts?.edited ? 1 : 0) }));
         flash(outcome);
+      },
+      review: (id, taskType, outcome, message) => {
+        setState((s) => {
+          const t = s.reviews[taskType] ?? { approved: 0, edited: 0, rejected: 0, recent: [] };
+          const next: ReviewTally = { ...t, [outcome]: t[outcome] + 1, recent: [...t.recent, outcome].slice(-50) };
+          return {
+            ...s,
+            done: { ...s.done, [id]: message },
+            edited: s.edited + (outcome === "edited" ? 1 : 0),
+            reviews: { ...s.reviews, [taskType]: next },
+          };
+        });
+        flash(message);
       },
       togglePause: (bot) => setState((s) => ({ ...s, paused: { ...s.paused, [bot]: !s.paused[bot] } })),
       addSent: (loanId, m) => setState((s) => ({ ...s, sent: { ...s.sent, [loanId]: [m, ...(s.sent[loanId] ?? [])] } })),

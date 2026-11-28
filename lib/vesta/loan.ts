@@ -242,8 +242,8 @@ function mapLoan(loan: Json): Mapped {
 function mapCondition(c: Json): VestaCondition | null {
   const status = String(c.conditionStatus ?? c.status ?? "");
   if (/cancel/i.test(status)) return null;
-  const done = /approved|completed/i.test(status);
-  const ready = /readytoapprove/i.test(status);
+  const done = /^(Approved|ManuallyCompleted|AutomaticallyCompleted)$/i.test(status);
+  const ready = /^ReadyToApprove$/i.test(status);
   return {
     text: plain(c.objectiveName) ?? plain(c.taskTemplateName) ?? plain(c.documentTypeName) ?? "Condition",
     owner: plain(c.entityDisplayName) ?? "",
@@ -263,7 +263,7 @@ function mapDocument(d: Json): VestaDocument {
   };
 }
 
-async function getJson(path: string): Promise<unknown> {
+export async function getJson(path: string): Promise<unknown> {
   const res = await vestaFetch(path, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 200).replace(/\s+/g, " ");
