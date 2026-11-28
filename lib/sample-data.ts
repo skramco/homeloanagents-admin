@@ -108,7 +108,7 @@ export type BotTask = { area: string; task: string; bot: string; reviewer: strin
 export const BOT_TASKS: BotTask[] = [
   { area: "Daily update", task: "Borrower-friendly update on every active loan, every day, even with no change", bot: "Concierge", reviewer: "File owner", borrowerGets: "Where you are, what we need, what's next", status: "drafting" },
   { area: "Conditions", task: "One email per open condition with how to resolve it", bot: "Processor / conditions", reviewer: "Processor 2", borrowerGets: "We need X, here's why and how to send it", status: "drafting" },
-  { area: "Questions", task: "Answer texts and emails to support@ in the context of the borrower's loan", bot: "Concierge", reviewer: "Processor 1 or 2", borrowerGets: "A direct answer plus the next step", status: "planned" },
+  { area: "Questions", task: "Answer texts and emails to support@ in the context of the borrower's loan", bot: "Concierge", reviewer: "Processor 1 or 2", borrowerGets: "A direct answer plus the next step", status: "drafting" },
   { area: "Stale files", task: "Spot files with no activity for 3+ days and recommend a next step", bot: "Dispatcher / oversight", reviewer: "File owner", borrowerGets: "Check-in with the one thing we need", status: "planned" },
   { area: "Next steps", task: "Recommend the next action on every file", bot: "Dispatcher / oversight", reviewer: "File owner", borrowerGets: "Internal only", status: "planned" },
   { area: "Disclosures", task: "Send the LE and intent to proceed within 3 business days of a complete application", bot: "Disclosure", reviewer: "Processor 1", borrowerGets: "Your Loan Estimate is ready and how to sign", status: "planned" },
