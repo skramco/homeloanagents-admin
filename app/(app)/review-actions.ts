@@ -62,7 +62,10 @@ export async function submitReview(draft: Draft, outcome: ReviewOutcome, finalBo
 
   // Send. Only a saved approval is ever sent, and only once: the row is claimed first.
   const blocker = sendBlocker(row.channel as "email" | "sms", draft.to, text);
-  if (blocker) return { ok: true, saved: true, sent: false, note: `Saved, not sent. ${blocker}` };
+  if (blocker) {
+    await db.from("outbound_messages").update({ send_error: blocker, updated_at: new Date().toISOString() }).eq("id", draft.id);
+    return { ok: true, saved: true, sent: false, note: `Saved, not sent. ${blocker}` };
+  }
   const claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: new Date().toISOString() }).eq("id", draft.id).eq("send_status", "held").select("id");
   if (claim.error || !claim.data?.length) return { ok: true, saved: true, sent: false, note: "Saved. It's already being sent." };
   const out = await deliver({ id: draft.id, channel: row.channel as "email" | "sms", to: draft.to!, subject: row.subject, body: text, inReplyTo: draft.inbound?.messageId ?? null });
@@ -72,5 +75,40 @@ export async function submitReview(draft: Draft, outcome: ReviewOutcome, finalBo
     return { ok: true, saved: true, sent: false, note: `Saved, but sending failed: ${out.error}` };
   }
   await db.from("outbound_messages").update({ send_status: "sent", provider: out.provider, provider_message_id: out.providerId, sent_at: now, updated_at: now }).eq("id", draft.id);
+  return { ok: true, saved: true, sent: true };
+}
+
+/** Sends an approved message that wasn't sent (held while sending was off, blocked, or failed). */
+export async function retrySend(id: string): Promise<ReviewResult> {
+  const session = await verifySessionValue((await cookies()).get(SESSION_COOKIE)?.value);
+  if (!session) return { ok: false, error: "Your session ended. Sign in again." };
+  if (!supabaseConfigured()) return { ok: false, error: "Supabase isn't set up." };
+  const db = getSupabaseAdmin();
+  const { data, error } = await db
+    .from("outbound_messages")
+    .select("id, outcome, channel, to_address, subject, final_body, monitor, send_status, in_reply_to")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return { ok: false, error: error?.message ?? "Not found." };
+  const row = data as { id: string; outcome: string; channel: "email" | "sms"; to_address: string | null; subject: string | null; final_body: string | null; monitor: string; send_status: string; in_reply_to: { messageId?: string } | null };
+  if (row.outcome === "rejected" || !row.final_body) return { ok: false, error: "This draft was rejected." };
+  if (row.send_status === "sent") return { ok: false, error: "Already sent." };
+  if ((row.monitor === "flagged" || monitor(`${row.subject ?? ""}\n${row.final_body}`).monitor === "flagged") && session.name !== "Mark") {
+    return { ok: false, error: "This mentions pricing or a payment, so only Mark can send it." };
+  }
+  const blocker = sendBlocker(row.channel, row.to_address, row.final_body);
+  const now = () => new Date().toISOString();
+  if (blocker) {
+    await db.from("outbound_messages").update({ send_error: blocker, updated_at: now() }).eq("id", id);
+    return { ok: true, saved: true, sent: false, note: `Not sent. ${blocker}` };
+  }
+  const claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: now() }).eq("id", id).in("send_status", ["held", "failed"]).select("id");
+  if (claim.error || !claim.data?.length) return { ok: false, error: "It's already being sent." };
+  const out = await deliver({ id, channel: row.channel, to: row.to_address!, subject: row.subject, body: row.final_body, inReplyTo: row.in_reply_to?.messageId ?? null });
+  if (!out.ok) {
+    await db.from("outbound_messages").update({ send_status: "failed", send_error: out.error, updated_at: now() }).eq("id", id);
+    return { ok: true, saved: true, sent: false, note: `Sending failed: ${out.error}` };
+  }
+  await db.from("outbound_messages").update({ send_status: "sent", send_error: null, provider: out.provider, provider_message_id: out.providerId, sent_at: now(), updated_at: now() }).eq("id", id);
   return { ok: true, saved: true, sent: true };
 }
