@@ -218,7 +218,11 @@ function rowToLoan(row: PipelineLoanRow, colIndex: Map<string, number>): Loan | 
 
 /** Loads the HLA pipeline view from Vesta in the selected environment (BETA by default). */
 export async function loadVestaPipeline(): Promise<VestaPipelineResult> {
-  const env = await currentVestaEnv();
+  return loadVestaPipelineFor(await currentVestaEnv());
+}
+
+/** The pipeline view for a given environment (no cookie needed, e.g. for the scheduled sync). */
+export async function loadVestaPipelineFor(env: VestaEnv): Promise<VestaPipelineResult> {
   const c = vestaConfig(env);
   const empty = (error: string): VestaPipelineResult => ({ env, loans: [], total: null, error, columns: [] });
   if (!isConfigured(c)) {
