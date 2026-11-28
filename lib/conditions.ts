@@ -83,3 +83,21 @@ export function conditionText(d: ConditionDetail): string {
   if (d.link) parts.push(`${d.link.name}: ${d.link.url}`);
   return parts.join("\n\n");
 }
+
+/** One condition as a short paragraph for the daily update: its name, then what to provide. */
+export function conditionSummary(d: ConditionDetail): string {
+  const lines = [d.name];
+  if (d.message) lines.push(d.message);
+  if (d.checklist.length) lines.push(`To do: ${d.checklist.join("; ")}.`);
+  if (d.documents.length) {
+    const lead =
+      d.documents.length === 1
+        ? "Document that works"
+        : d.documentsNeeded && d.documentsNeeded < d.documents.length
+          ? `Send ${d.documentsNeeded === 1 ? "any one" : `any ${d.documentsNeeded}`} of`
+          : "Documents that work";
+    lines.push(`${lead}: ${d.documents.join(", ")}.`);
+  }
+  if (d.link) lines.push(`${d.link.name}: ${d.link.url}`);
+  return lines.join("\n");
+}

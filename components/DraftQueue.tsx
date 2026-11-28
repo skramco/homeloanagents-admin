@@ -149,6 +149,25 @@ function actionError(err: unknown): string {
   return `Something went wrong: ${msg}. Reload the page and check Recently reviewed before trying again.`;
 }
 
+/** Reviewed messages, newest first, with what happened when sending and a retry for held or failed ones. */
+export function RecentList({ recent }: { recent: SavedReviews["recent"] }) {
+  return (
+    <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+            {recent.map((r) => (
+              <span key={r.id} className="small">
+                <span className={r.send_status === "sent" ? "pill ok" : r.send_status === "failed" ? "pill attention" : r.outcome === "rejected" ? "pill muted" : "pill warn"} style={{ marginRight: 8 }}>
+                  {r.outcome === "rejected" ? "Rejected" : r.send_status === "sent" ? "Sent" : r.send_status === "failed" ? "Failed" : r.send_status === "sending" ? "Sending" : "Not sent"}
+                </span>
+                {r.task_type} to {r.to_address ?? "no address"} · {r.reviewed_by} ·{" "}
+                {new Date(r.sent_at ?? r.reviewed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {r.send_error ? <span style={{ color: "#A3261B" }}> · {r.send_error}</span> : null}
+                {r.outcome !== "rejected" && (r.send_status === "held" || r.send_status === "failed") ? <RetryButton id={r.id} /> : null}
+              </span>
+            ))}
+          </div>
+  );
+}
+
 function RetryButton({ id }: { id: string }) {
   const ws = useWorkspace();
   const router = useRouter();
@@ -188,6 +207,8 @@ type QueueProps = {
   readiness?: TaskType[];
   /** Shown above the queue, e.g. which inboxes are connected. */
   status?: React.ReactNode;
+  /** Tabs under the heading. */
+  nav?: React.ReactNode;
   empty?: string;
 };
 
@@ -200,6 +221,7 @@ export function DraftQueue({
   intro = "The bots draft every borrower message from live Vesta data. Nothing goes out until a person approves it. Each approve, edit or reject counts toward that message type going automatic.",
   readiness = ["Daily update", "Condition request"],
   status,
+  nav,
   empty = "Nothing waiting for review.",
 }: QueueProps) {
   const ws = useWorkspace();
@@ -244,6 +266,7 @@ export function DraftQueue({
         <h1>{title}</h1>
         <span className="muted">{intro}</span>
       </header>
+      {nav}
       <div className="banner warn">
         {!saved.available
           ? `Approving doesn’t send anything, and reviews are only kept in this browser. ${saved.problem ?? ""}`
@@ -271,7 +294,7 @@ export function DraftQueue({
           </button>
         ))}
         <span className="small muted">
-          {title === "Outbound review" ? (
+          {!status ? (
             <>
               Drafted from {result.checked} active Vesta loan{result.checked === 1 ? "" : "s"}
               {result.skipped ? ` (${result.skipped} more not drafted yet)` : ""}.
@@ -285,19 +308,7 @@ export function DraftQueue({
       {saved.recent.length ? (
         <details className="card" open={saved.recent.some((r) => r.send_status === "failed" || (r.send_status === "held" && r.send_error))}>
           <summary className="section-label" style={{ cursor: "pointer" }}>Recently reviewed · what was sent</summary>
-          <div className="stack" style={{ gap: 6, marginTop: 8 }}>
-            {saved.recent.map((r) => (
-              <span key={r.id} className="small">
-                <span className={r.send_status === "sent" ? "pill ok" : r.send_status === "failed" ? "pill attention" : r.outcome === "rejected" ? "pill muted" : "pill warn"} style={{ marginRight: 8 }}>
-                  {r.outcome === "rejected" ? "Rejected" : r.send_status === "sent" ? "Sent" : r.send_status === "failed" ? "Failed" : r.send_status === "sending" ? "Sending" : "Not sent"}
-                </span>
-                {r.task_type} to {r.to_address ?? "no address"} · {r.reviewed_by} ·{" "}
-                {new Date(r.sent_at ?? r.reviewed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                {r.send_error ? <span style={{ color: "#A3261B" }}> · {r.send_error}</span> : null}
-                {r.outcome !== "rejected" && (r.send_status === "held" || r.send_status === "failed") ? <RetryButton id={r.id} /> : null}
-              </span>
-            ))}
-          </div>
+          <RecentList recent={saved.recent} />
         </details>
       ) : null}
 

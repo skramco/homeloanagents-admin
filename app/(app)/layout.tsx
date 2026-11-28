@@ -19,18 +19,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="shell">
         <Sidebar loanCount={loans.length} />
         <main className="main">
-          <div className="banner" style={{ justifyContent: "space-between" }}>
-            <span className="btn-row" style={{ gap: "8px 16px", alignItems: "center" }}>
-              <span className="mono">Pilot · CA, TX, FL</span>
-              <span>Voice (xAI agent), text and email. Every call announces recording</span>
-              <span>A processor reads every outbound message</span>
-              <span>Anything with a rate, APR, points, payment or lock needs Mark</span>
-            </span>
+          <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <VestaSwitch status={vesta} canUseProd={VESTA_PROD_ROLES.includes(session?.name ?? "")} />
             <form action={logout}>
               <button type="submit" className="btn link" style={{ minHeight: 32, padding: 0 }}>Sign out</button>
             </form>
           </div>
-          <VestaSwitch status={vesta} canUseProd={VESTA_PROD_ROLES.includes(session?.name ?? "")} />
           {children}
         </main>
       </div>

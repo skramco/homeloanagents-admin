@@ -3,20 +3,18 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { Loan } from "@/lib/types";
-import { APPROVALS, ESCALATIONS, STAGE_SOURCES, STAGES } from "@/lib/sample-data";
+import { STAGE_SOURCES, STAGES } from "@/lib/sample-data";
 import { HEALTH_LABEL } from "@/lib/loan-view";
-import { useWorkspace } from "./Workspace";
 
 type Filter = { kind: "all" } | { kind: "stage"; stage: number } | { kind: "trid" };
 
 export function PipelineView({ loans, reviewedCount }: { loans: Loan[]; reviewedCount?: number | null }) {
-  const ws = useWorkspace();
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
 
-  const openApprovals = APPROVALS.filter((a) => !ws.done[a.id]).length;
-  const reviewed = reviewedCount ?? Object.values(ws.reviews).reduce((n, t) => n + t.approved + t.edited + t.rejected, 0);
-  const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]).length;
   const tridWarn = loans.filter((l) => l.tridState === "warn").length;
+  const waiting = loans.filter((l) => l.health === "waiting").length;
+  const attention = loans.filter((l) => l.health === "attention").length;
+  void reviewedCount;
 
   const rows = loans.filter((l) => {
     if (filter.kind === "trid") return l.tridState === "warn";
@@ -25,17 +23,15 @@ export function PipelineView({ loans, reviewedCount }: { loans: Loan[]; reviewed
   });
 
   const kpis = [
-    { label: "Waiting on Mark", value: openApprovals, sub: "Target: same business day", color: "#A3261B", href: "/approvals" },
-    { label: "Unapproved rate messages sent", value: 0, sub: "Target 0. The monitor blocks them.", color: "var(--emerald-800)", href: "/outbound" },
-    { label: "Bot drafts reviewed", value: reviewed, sub: `${ws.edited} edited by a person`, color: "var(--text)", href: "/outbound" },
-    { label: "TRID deadlines in 1 business day", value: tridWarn, sub: "Target: 100% on time", color: "#7A4A00", onClick: () => setFilter({ kind: "trid" }) },
-    { label: "Open escalations", value: openEsc, sub: "Routed by the Dispatcher", color: "var(--text)", href: "/escalations" },
+    { label: "Needs attention", value: attention, sub: "Flagged in Vesta", color: "#A3261B", href: undefined as string | undefined, onClick: undefined as (() => void) | undefined },
+    { label: "Waiting on the borrower", value: waiting, sub: "Open borrower tasks in Vesta", color: "#7A4A00" },
+    { label: "TRID deadlines in 1 business day", value: tridWarn, sub: "Click to show them", color: "#7A4A00", onClick: () => setFilter({ kind: "trid" }) },
   ];
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       <header className="page-head">
-        <h1>Pipeline</h1>
+        <h1>Loans</h1>
         <span className="muted">Every HomeLoanAgents file, from the first call to the xAI voice agent (or a web, text or email chat) to funding in Vesta.</span>
       </header>
 
