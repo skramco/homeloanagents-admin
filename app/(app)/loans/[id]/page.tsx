@@ -2,14 +2,17 @@ import { notFound } from "next/navigation";
 import { LoanFile } from "@/components/LoanFile";
 import { loadLoan } from "@/lib/data";
 import { loadVestaLoanDetail } from "@/lib/vesta/loan";
+import { loadLoanTimeline } from "@/lib/timeline";
 
 export default async function LoanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const loan = await loadLoan(id);
   if (!loan) notFound();
-  if (loan.source !== "vesta") return <LoanFile loan={loan} />;
+  const vestaId = loan.source === "vesta" ? loan.id.replace(/^v-/, "") : null;
+  const timeline = await loadLoanTimeline(loan.id, vestaId).catch((e: Error) => ({ available: false, problem: e.message, items: [], lastSent: {}, lastVestaEvent: null }));
+  if (!vestaId) return <LoanFile loan={loan} timeline={timeline} />;
 
-  const vesta = await loadVestaLoanDetail(loan.id.replace(/^v-/, ""));
+  const vesta = await loadVestaLoanDetail(vestaId);
   // Real conditions from Vesta replace the empty list on the pipeline row.
   // The full loan fills header fields the pipeline view may not carry.
   const h = vesta.headline;
@@ -25,5 +28,5 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
     closing: !loan.closing && h.closing ? h.closing : loan.closing,
     conditions: vesta.conditions.map(({ text, owner, status }) => ({ text, owner, status })),
   };
-  return <LoanFile loan={merged} vesta={vesta} />;
+  return <LoanFile loan={merged} vesta={vesta} timeline={timeline} />;
 }
