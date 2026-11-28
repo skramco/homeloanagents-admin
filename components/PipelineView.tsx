@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { Loan } from "@/lib/types";
-import { APPROVALS, ESCALATIONS, OUTBOUND, STAGE_SOURCES, STAGES } from "@/lib/sample-data";
+import { APPROVALS, ESCALATIONS, STAGE_SOURCES, STAGES } from "@/lib/sample-data";
 import { HEALTH_LABEL } from "@/lib/loan-view";
 import { useWorkspace } from "./Workspace";
 
@@ -14,7 +14,7 @@ export function PipelineView({ loans }: { loans: Loan[] }) {
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
 
   const openApprovals = APPROVALS.filter((a) => !ws.done[a.id]).length;
-  const openOutbound = OUTBOUND.filter((o) => !ws.done[o.id]).length;
+  const reviewed = Object.values(ws.reviews).reduce((n, t) => n + t.approved + t.edited + t.rejected, 0);
   const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]).length;
   const tridWarn = loans.filter((l) => l.tridState === "warn").length;
 
@@ -27,7 +27,7 @@ export function PipelineView({ loans }: { loans: Loan[] }) {
   const kpis = [
     { label: "Waiting on Mark", value: openApprovals, sub: "Target: same business day", color: "#A3261B", href: "/approvals" },
     { label: "Unapproved rate messages sent", value: 0, sub: "Target 0. The monitor blocks them.", color: "var(--emerald-800)", href: "/outbound" },
-    { label: "Outbound awaiting review", value: openOutbound, sub: `${ws.edited} edited by a processor`, color: "var(--text)", href: "/outbound" },
+    { label: "Bot drafts reviewed", value: reviewed, sub: `${ws.edited} edited by a person`, color: "var(--text)", href: "/outbound" },
     { label: "TRID deadlines in 1 business day", value: tridWarn, sub: "Target: 100% on time", color: "#7A4A00", onClick: () => setFilter({ kind: "trid" }) },
     { label: "Open escalations", value: openEsc, sub: "Routed by the Dispatcher", color: "var(--text)", href: "/escalations" },
   ];

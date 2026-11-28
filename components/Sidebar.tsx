@@ -4,19 +4,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useWorkspace } from "./Workspace";
-import { APPROVALS, APPROVAL_OWNERS, ESCALATIONS, OUTBOUND, ROLES, ROLE_NOTES } from "@/lib/sample-data";
+import { APPROVALS, APPROVAL_OWNERS, ESCALATIONS, ROLES, ROLE_NOTES } from "@/lib/sample-data";
 
 export function Sidebar({ loanCount }: { loanCount: number }) {
   const pathname = usePathname();
   const ws = useWorkspace();
   const openApprovals = APPROVALS.filter((a) => !ws.done[a.id]);
-  const openOutbound = OUTBOUND.filter((o) => !ws.done[o.id]);
   const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]);
 
   const items = [
     { href: "/", label: "Pipeline", count: String(loanCount), hot: false },
     { href: "/approvals", label: "Mark’s approvals", count: String(openApprovals.length), hot: APPROVAL_OWNERS.includes(ws.role) && openApprovals.length > 0 },
-    { href: "/outbound", label: "Outbound review", count: String(openOutbound.length), hot: openOutbound.some((o) => o.reviewer === ws.role) },
+    { href: "/outbound", label: "Outbound review", count: "drafts", hot: false },
     { href: "/escalations", label: "Escalations", count: String(openEsc.length), hot: openEsc.some((e) => e.owners.includes(ws.role)) },
     { href: "/bots", label: "Bot monitor", count: "7 live", hot: false },
   ];

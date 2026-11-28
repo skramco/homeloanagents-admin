@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { APPROVAL_OWNERS, APPROVALS, BOTS, ESCALATIONS, OUTBOUND } from "@/lib/sample-data";
+import { APPROVAL_OWNERS, APPROVALS, BOT_TASKS, BOTS, ESCALATIONS, OUTBOUND } from "@/lib/sample-data";
 import { firstName } from "@/lib/loan-view";
 import type { Loan } from "@/lib/types";
 import { useWorkspace } from "./Workspace";
@@ -191,6 +191,34 @@ export function BotsView({ loans }: { loans: Loan[] }) {
           );
         })}
       </div>
+      <section className="card" style={{ gap: 0, overflowX: "auto" }}>
+        <h2 style={{ marginBottom: 4 }}>Task catalog</h2>
+        <span className="small muted" style={{ marginBottom: 10 }}>
+          Every task the bots draft for a person to review. Each approve, edit or reject in Outbound review counts toward that task going automatic (95% approved as written over 50). Some never go automatic.
+        </span>
+        <div style={{ minWidth: 820 }}>
+          <div className="line-item small muted" style={{ gridTemplateColumns: "120px minmax(0, 2fr) 150px 130px minmax(0, 1.4fr) 110px", fontWeight: 600 }}>
+            <span>Area</span><span>Task</span><span>Bot</span><span>Reviewer</span><span>Borrower gets</span><span>Status</span>
+          </div>
+          {BOT_TASKS.map((t, i) => {
+            const tally = ws.reviews[t.area === "Daily update" ? "Daily update" : t.task.startsWith("One email per open condition") ? "Condition request" : ""];
+            return (
+              <div key={i} className="line-item" style={{ gridTemplateColumns: "120px minmax(0, 2fr) 150px 130px minmax(0, 1.4fr) 110px", alignItems: "start" }}>
+                <span className="small muted">{t.area}</span>
+                <span>{t.task}</span>
+                <span className="bot-name small">{t.bot}</span>
+                <span className="small">{t.reviewer}</span>
+                <span className="small" style={{ color: "var(--ink-700)" }}>{t.borrowerGets}</span>
+                <span className="cell-col" style={{ gap: 4 }}>
+                  <span className={t.status === "drafting" ? "pill ok" : "pill muted"}>{t.status === "drafting" ? "Drafting now" : "Planned"}</span>
+                  {t.neverAutomatic ? <span className="small" style={{ color: "#A3261B" }}>Never automatic</span> : null}
+                  {tally ? <span className="small muted">{tally.recent.length} reviewed</span> : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
