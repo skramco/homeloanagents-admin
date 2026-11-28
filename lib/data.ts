@@ -1,5 +1,8 @@
 // Server-side only: uses the Supabase service role key.
 import { cache } from "react";
+import { after } from "next/server";
+import { saveHlaLoans } from "./hla-loans";
+import type { VestaEnv } from "./vesta/config";
 import type { Loan } from "./types";
 import { loadVestaPipeline, type VestaPipelineResult } from "./vesta/pipeline";
 import { getSupabaseAdmin, type CallLeadRow } from "./supabase/admin";
@@ -74,8 +77,25 @@ async function loadCallLeads(): Promise<{ loans: Loan[]; error: string | null }>
 
 /** Real voice-agent leads (newest first), then real loan files from the Vesta pipeline view. */
 // cache(): the layout and the page both load loans; this makes it one Vesta call per request.
+// Page loads already fetch the HLA pipeline view, so they also refresh the HLA loan list
+// (at most every 10 minutes per server), after the page has been sent.
+let lastSaved = 0;
+function rememberHlaLoans(env: VestaEnv, loans: Loan[]) {
+  if (Date.now() - lastSaved < 10 * 60_000) return;
+  lastSaved = Date.now();
+  try {
+    after(async () => {
+      const r = await saveHlaLoans(env, loans);
+      if (!r.ok) console.warn(`HLA loan list not saved: ${r.error}`);
+    });
+  } catch {
+    // Outside a request (no after()): skip; the scheduled sync covers it.
+  }
+}
+
 export const loadLoans = cache(async (): Promise<LoadedLoans> => {
   const [leads, vesta] = await Promise.all([loadCallLeads(), loadVestaPipeline()]);
+  if (!vesta.error && vesta.loans.length) rememberHlaLoans(vesta.env, vesta.loans);
   return { loans: [...leads.loans, ...vesta.loans], liveCount: leads.loans.length, liveError: leads.error, vesta };
 });
 
