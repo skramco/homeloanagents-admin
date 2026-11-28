@@ -1,9 +1,11 @@
 import { PipelineView } from "@/components/PipelineView";
 import { loadLoans, supabaseConfigured } from "@/lib/data";
+import { loadSavedReviews } from "@/lib/reviews";
 
 export default async function PipelinePage() {
   const { loans, liveCount, liveError, vesta } = await loadLoans();
   const env = vesta.env.toUpperCase();
+  const saved = await loadSavedReviews([]);
   return (
     <>
       {vesta.error ? (
@@ -23,7 +25,7 @@ export default async function PipelinePage() {
       ) : (
         <div className="banner warn">Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to show voice-agent leads.</div>
       )}
-      <PipelineView loans={loans} />
+      <PipelineView loans={loans} reviewedCount={saved.available ? Object.values(saved.tallies).reduce((n, t) => n + t.approved + t.edited + t.rejected, 0) : null} />
       {vesta.columns.length > 0 ? (
         <details className="small muted">
           <summary>Columns in this Vesta view ({vesta.columns.length})</summary>

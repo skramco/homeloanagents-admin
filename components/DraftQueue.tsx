@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { submitReview } from "@/app/(app)/review-actions";
+import type { SavedReviews } from "@/lib/reviews";
 import type { Draft, DraftResult, TaskType } from "@/lib/drafts";
-import { useWorkspace, type ReviewTally } from "./Workspace";
+import { useWorkspace, type ReviewOutcome, type ReviewTally } from "./Workspace";
 
 const FOOTER =
   "HomeLoanAgents is a DBA of United Fidelity Funding · NMLS [UFF ID] · Mark NMLS [ID] · NMLS Consumer Access · CA/TX/FL licenses · Equal Housing Opportunity";
@@ -38,6 +41,22 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
   const ws = useWorkspace();
   const [text, setText] = useState(d.body);
   const [editing, setEditing] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const decide = (outcome: ReviewOutcome, message: string) =>
+    start(async () => {
+      setError(null);
+      const r = await submitReview(d, outcome, text, reason);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      ws.review(d.id, d.taskType, outcome, message);
+      if (r.saved) router.refresh();
+    });
   const mine = d.reviewer === ws.role || (d.monitor === "flagged" && ws.role === "Mark");
   const changed = text.trim() !== d.body.trim();
   const blocked = d.monitor === "blocked";
@@ -75,27 +94,36 @@ function DraftCard({ d, loanName }: { d: Draft; loanName: string }) {
         {d.channel === "Email" ? <span className="footer-note">{FOOTER}</span> : null}
       </div>
       {d.note ? <span style={{ fontSize: 13, color: "#A3261B" }}>{d.note}</span> : null}
-      <div className="btn-row">
-        <button
-          type="button"
-          className="btn primary"
-          disabled={blocked || (needsMark && ws.role !== "Mark")}
-          title={needsMark && ws.role !== "Mark" ? "Only Mark can approve pricing language" : undefined}
-          onClick={() =>
-            ws.review(d.id, d.taskType, changed ? "edited" : "approved", changed ? "Edited and approved. The edit is saved as training data." : "Approved as written.")
-          }
-        >
-          {changed ? "Approve with my edits" : "Approve"}
-        </button>
-        <button type="button" className="btn" onClick={() => setEditing((e) => !e)}>{editing ? "Done editing" : "Edit"}</button>
-        <button type="button" className="btn" onClick={() => ws.review(d.id, d.taskType, "rejected", "Rejected. The bot will learn from it.")}>Reject</button>
-      </div>
+      {error ? <span role="alert" style={{ fontSize: 13, color: "#A3261B" }}>{error}</span> : null}
+      {rejecting ? (
+        <div className="btn-row" style={{ alignItems: "center" }}>
+          <label className="small muted" htmlFor={`why-${d.id}`}>Why reject it? This teaches the bot.</label>
+          <input id={`why-${d.id}`} className="input" style={{ flex: "1 1 240px" }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong condition, too long, tone" />
+          <button type="button" className="btn" disabled={pending} onClick={() => decide("rejected", "Rejected. The reason is saved as training data.")}>Reject</button>
+          <button type="button" className="btn" onClick={() => setRejecting(false)}>Cancel</button>
+        </div>
+      ) : (
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn primary"
+            disabled={pending || blocked || (needsMark && ws.role !== "Mark")}
+            title={needsMark && ws.role !== "Mark" ? "Only Mark can approve pricing language" : undefined}
+            onClick={() => decide(changed ? "edited" : "approved", changed ? "Edited and approved. The edit is saved as training data." : "Approved as written.")}
+          >
+            {pending ? "Saving…" : changed ? "Approve with my edits" : "Approve"}
+          </button>
+          <button type="button" className="btn" onClick={() => setEditing((e) => !e)}>{editing ? "Done editing" : "Edit"}</button>
+          <button type="button" className="btn" onClick={() => setRejecting(true)}>Reject</button>
+        </div>
+      )}
     </div>
   );
 }
 
 type QueueProps = {
   result: DraftResult;
+  saved: SavedReviews;
   loanNames: Record<string, string>;
   title?: string;
   intro?: string;
@@ -107,6 +135,7 @@ type QueueProps = {
 
 export function DraftQueue({
   result,
+  saved,
   loanNames,
   title = "Outbound review",
   intro = "The bots draft every borrower message from live Vesta data. Nothing goes out until a person approves it. Each approve, edit or reject counts toward that message type going automatic.",
@@ -116,7 +145,9 @@ export function DraftQueue({
 }: QueueProps) {
   const ws = useWorkspace();
   const [type, setType] = useState<TaskType | "all">("all");
-  const open = result.drafts.filter((d) => !ws.done[d.id] && (type === "all" || d.taskType === type));
+  const isDone = (id: string) => Boolean(ws.done[id] || saved.reviewed[id]);
+  const tallies = saved.available ? saved.tallies : ws.reviews;
+  const open = result.drafts.filter((d) => !isDone(d.id) && (type === "all" || d.taskType === type));
   const types = Array.from(new Set(result.drafts.map((d) => d.taskType)));
   return (
     <div className="stack">
@@ -125,7 +156,9 @@ export function DraftQueue({
         <span className="muted">{intro}</span>
       </header>
       <div className="banner warn">
-        Approving doesn’t send anything yet. Sending (email and text) and saving reviews to the audit log come next. For now, reviews are kept in this browser.
+        {saved.available
+          ? "Approving doesn’t send anything yet. Every review is saved with who made it and the text as approved, and counts toward going automatic."
+          : `Approving doesn’t send anything yet, and reviews are only kept in this browser. ${saved.problem ?? ""}`}
       </div>
       {status}
       {result.errors.length ? <div className="banner warn">Some loans couldn’t be drafted: {result.errors.slice(0, 3).join(" · ")}</div> : null}
@@ -134,16 +167,16 @@ export function DraftQueue({
         <span className="section-label">Path to automatic · 95% approved as written over the last {WINDOW}</span>
         <div className="grid-auto" style={{ ["--min" as string]: "220px" }}>
           {readiness.map((t) => (
-            <Readiness key={t} type={t} t={ws.reviews[t]} />
+            <Readiness key={t} type={t} t={tallies[t]} />
           ))}
         </div>
       </section>
 
       <div className="btn-row" style={{ alignItems: "center" }}>
-        <button type="button" className="chip" aria-pressed={type === "all"} onClick={() => setType("all")}>All {result.drafts.filter((d) => !ws.done[d.id]).length}</button>
+        <button type="button" className="chip" aria-pressed={type === "all"} onClick={() => setType("all")}>All {result.drafts.filter((d) => !isDone(d.id)).length}</button>
         {types.map((t) => (
           <button key={t} type="button" className="chip" aria-pressed={type === t} onClick={() => setType(t)}>
-            {t} {result.drafts.filter((d) => d.taskType === t && !ws.done[d.id]).length}
+            {t} {result.drafts.filter((d) => d.taskType === t && !isDone(d.id)).length}
           </button>
         ))}
         <span className="small muted">

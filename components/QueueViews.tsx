@@ -4,7 +4,7 @@ import Link from "next/link";
 import { APPROVAL_OWNERS, APPROVALS, BOT_TASKS, BOTS, ESCALATIONS, OUTBOUND } from "@/lib/sample-data";
 import { firstName } from "@/lib/loan-view";
 import type { Loan } from "@/lib/types";
-import { useWorkspace } from "./Workspace";
+import { useWorkspace, type ReviewTally } from "./Workspace";
 
 type LoanIndex = Record<string, Pick<Loan, "id" | "name" | "state" | "bot" | "botNow">>;
 
@@ -137,8 +137,9 @@ export function EscalationsView({ loans }: { loans: LoanIndex }) {
   );
 }
 
-export function BotsView({ loans }: { loans: Loan[] }) {
+export function BotsView({ loans, tallies }: { loans: Loan[]; tallies?: Record<string, ReviewTally> | null }) {
   const ws = useWorkspace();
+  const reviews = tallies ?? ws.reviews;
   const flagged = OUTBOUND.filter((o) => o.monitor !== "passed").length;
   const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]).length;
   return (
@@ -201,7 +202,7 @@ export function BotsView({ loans }: { loans: Loan[] }) {
             <span>Area</span><span>Task</span><span>Bot</span><span>Reviewer</span><span>Borrower gets</span><span>Status</span>
           </div>
           {BOT_TASKS.map((t, i) => {
-            const tally = ws.reviews[t.area === "Daily update" ? "Daily update" : t.task.startsWith("One email per open condition") ? "Condition request" : t.area === "Questions" ? "Support reply" : ""];
+            const tally = reviews[t.area === "Daily update" ? "Daily update" : t.task.startsWith("One email per open condition") ? "Condition request" : t.area === "Questions" ? "Support reply" : ""];
             return (
               <div key={i} className="line-item" style={{ gridTemplateColumns: "120px minmax(0, 2fr) 150px 130px minmax(0, 1.4fr) 110px", alignItems: "start" }}>
                 <span className="small muted">{t.area}</span>

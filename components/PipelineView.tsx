@@ -9,12 +9,12 @@ import { useWorkspace } from "./Workspace";
 
 type Filter = { kind: "all" } | { kind: "stage"; stage: number } | { kind: "trid" };
 
-export function PipelineView({ loans }: { loans: Loan[] }) {
+export function PipelineView({ loans, reviewedCount }: { loans: Loan[]; reviewedCount?: number | null }) {
   const ws = useWorkspace();
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
 
   const openApprovals = APPROVALS.filter((a) => !ws.done[a.id]).length;
-  const reviewed = Object.values(ws.reviews).reduce((n, t) => n + t.approved + t.edited + t.rejected, 0);
+  const reviewed = reviewedCount ?? Object.values(ws.reviews).reduce((n, t) => n + t.approved + t.edited + t.rejected, 0);
   const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]).length;
   const tridWarn = loans.filter((l) => l.tridState === "warn").length;
 
