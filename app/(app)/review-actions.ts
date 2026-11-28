@@ -61,7 +61,7 @@ export async function submitReview(draft: Draft, outcome: ReviewOutcome, finalBo
   if (outcome === "rejected") return { ok: true, saved: true };
 
   // Send. Only a saved approval is ever sent, and only once: the row is claimed first.
-  const blocker = sendBlocker(row.channel as "email" | "sms", draft.to);
+  const blocker = sendBlocker(row.channel as "email" | "sms", draft.to, text);
   if (blocker) return { ok: true, saved: true, sent: false, note: `Saved, not sent. ${blocker}` };
   const claim = await db.from("outbound_messages").update({ send_status: "sending", updated_at: new Date().toISOString() }).eq("id", draft.id).eq("send_status", "held").select("id");
   if (claim.error || !claim.data?.length) return { ok: true, saved: true, sent: false, note: "Saved. It's already being sent." };

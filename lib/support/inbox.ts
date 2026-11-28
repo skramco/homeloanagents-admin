@@ -1,5 +1,5 @@
 import type { Loan } from "../types";
-import { loadLoanContexts, type DraftResult } from "../drafts";
+import { loadLoanContexts, polishDrafts, type DraftResult } from "../drafts";
 import { gmailConfigured, loadSupportEmail, supportMailbox } from "./gmail";
 import { loadSupportTexts, twilioConfigured } from "./twilio";
 import { draftReplies } from "./match";
@@ -27,7 +27,7 @@ export async function loadSupportInbox(loans: Loan[]): Promise<SupportResult> {
   ]);
   const messages = [...email.messages, ...text.messages].sort((a, b) => b.at.localeCompare(a.at));
   return {
-    drafts: draftReplies(messages, loans, ctx.contexts),
+    drafts: await polishDrafts(draftReplies(messages, loans, ctx.contexts)),
     checked: ctx.checked,
     skipped: ctx.skipped,
     errors: ctx.errors,
