@@ -11,7 +11,7 @@ import type { Loan, Role } from "./types";
 import { STAGES } from "./sample-data";
 import { getJson } from "./vesta/loan";
 import { grokConfigured, writeWithGrok, type Written } from "./grok";
-import { conditionDetail, conditionText, isBorrowerCondition, isClosed } from "./conditions";
+import { conditionDetail, conditionSummary, isBorrowerCondition, isClosed } from "./conditions";
 
 export type TaskType = "Daily update" | "Condition request" | "Support reply";
 export const TASK_TYPES: TaskType[] = ["Daily update", "Condition request", "Support reply"];
@@ -119,34 +119,6 @@ function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
   const vestaId = loan.id.replace(/^v-/, "");
   const drafts: Draft[] = [];
 
-  // One email per open condition, in plain words, with how to resolve it.
-  for (const c of conditions) {
-    const d = conditionDetail(c);
-    const name = d.name;
-    const timing = String(c.conditionTiming ?? "");
-    const when = /PriorToDocs|PriorToClosing|PriorToFunding/.test(timing) ? "before we can prepare your closing documents" : "for the underwriter to approve your loan";
-    const what = conditionText(d);
-    const body =
-      `Hi ${first},\n\nTo keep your loan moving, we need one thing from you: ${name}. We need it ${when}.\n\n` +
-      (what ? `${what}\n\n` : "") +
-      (d.needsDocument
-        ? "How to send it: upload it in your HomeLoanAgents portal, or reply to this email with it attached."
-        : "How to take care of it: do it in your HomeLoanAgents portal, or reply to this email.") +
-      ` If you're not sure what counts, reply and we'll help.\n\n${SIGN_OFF}`;
-    drafts.push({
-      id: `cond-${vestaId}-${String(c.id ?? c.taskTemplateId ?? name).slice(0, 40)}`,
-      loanId: loan.id,
-      taskType: "Condition request",
-      bot: "Processor / conditions",
-      channel: "Email",
-      reviewer: "Processor 2",
-      to: email,
-      subject: `One item needed for your loan: ${name}`,
-      body,
-      ...(noEmail ?? monitor(body)),
-    });
-  }
-
   // Daily update, even when nothing changed.
   const stage = loan.stage;
   const next: string[] = [];
@@ -156,8 +128,13 @@ function draftsForLoan(loan: Loan, vLoan: Json, conditions: Json[]): Draft[] {
   if (stage <= 4 && le) next.push(`Your Loan Estimate goes out by ${le}.`);
   if (stage >= 6 && cd) next.push(`Your Closing Disclosure goes out by ${cd}.`);
   if (close) next.push(`We're working toward closing on ${close}.`);
-  const needs = conditions.length
-    ? `What we need from you:\n${conditions.map((c) => `- ${conditionDetail(c).name}`).join("\n")}\nWe've sent a separate note on each with how to send it.`
+  // One email a day per borrower: the open conditions ride in the daily update, each with
+  // exactly what to provide, instead of a separate email per condition.
+  const details = conditions.map(conditionDetail);
+  const needs = details.length
+    ? `What we need from you (${details.length} item${details.length === 1 ? "" : "s"}):\n\n` +
+      details.map((d) => conditionSummary(d)).join("\n\n") +
+      `\n\nHow to send ${details.length === 1 ? "it" : "them"}: upload in your HomeLoanAgents portal, or reply to this email with ${details.length === 1 ? "it" : "them"} attached. If you're not sure what counts, reply and we'll help.`
     : "What we need from you: nothing right now.";
   const body =
     `Hi ${first},\n\nHere's your loan update for ${today()}.\n\n` +

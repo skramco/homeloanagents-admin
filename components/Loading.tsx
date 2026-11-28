@@ -15,7 +15,7 @@ export function Loading({ title, steps }: { title: string; steps: string[] }) {
             <li key={s}>{s}</li>
           ))}
         </ul>
-        <span className="small muted">This can take up to a minute the first time each day while Grok writes the drafts. After that it’s quicker.</span>
+        <span className="small muted">This can take up to a minute the first time each day while the loan files load. After that it’s quicker.</span>
       </div>
       {[0, 1, 2].map((i) => (
         <div key={i} className="card skeleton" style={{ height: 120 }} />

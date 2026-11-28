@@ -4,24 +4,19 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useWorkspace } from "./Workspace";
-import { APPROVALS, APPROVAL_OWNERS, ESCALATIONS, ROLES, ROLE_NOTES } from "@/lib/sample-data";
+import { ROLES, ROLE_NOTES } from "@/lib/sample-data";
 
 export function Sidebar({ loanCount }: { loanCount: number }) {
   const pathname = usePathname();
   const ws = useWorkspace();
-  const openApprovals = APPROVALS.filter((a) => !ws.done[a.id]);
-  const openEsc = ESCALATIONS.filter((e) => !ws.done[e.id]);
-
   const items = [
-    { href: "/", label: "Pipeline", count: String(loanCount), hot: false },
-    { href: "/approvals", label: "Mark’s approvals", count: String(openApprovals.length), hot: APPROVAL_OWNERS.includes(ws.role) && openApprovals.length > 0 },
-    { href: "/outbound", label: "Outbound review", count: "drafts", hot: false },
-    { href: "/support", label: "Support inbox", count: "inbox", hot: false },
-    { href: "/escalations", label: "Escalations", count: String(openEsc.length), hot: openEsc.some((e) => e.owners.includes(ws.role)) },
-    { href: "/bots", label: "Bot monitor", count: "7 live", hot: false },
+    { href: "/", label: "Today", count: "", hot: false },
+    { href: "/loans", label: "Loans", count: String(loanCount), hot: false },
+    { href: "/inbox", label: "Inbox", count: "", hot: false },
+    { href: "/bots", label: "Bots", count: "", hot: false },
   ];
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" || pathname.startsWith("/loans") : pathname.startsWith(href));
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
     <nav aria-label="Main" className="side">
@@ -37,7 +32,7 @@ export function Sidebar({ loanCount }: { loanCount: number }) {
       {items.map((it) => (
         <Link key={it.href} href={it.href} className="nav-link" aria-current={isActive(it.href) ? "page" : undefined}>
           <span>{it.label}</span>
-          <span className={it.hot ? "nav-count hot" : "nav-count"}>{it.count}</span>
+          {it.count ? <span className={it.hot ? "nav-count hot" : "nav-count"}>{it.count}</span> : null}
         </Link>
       ))}
       <div className="roles">
@@ -52,10 +47,7 @@ export function Sidebar({ loanCount }: { loanCount: number }) {
         <span className="roles-note">{ROLE_NOTES[ws.role]}</span>
       </div>
       <div className="side-foot">
-        Real loans from Vesta plus voice-agent leads. Clicks are saved only in this browser.{" "}
-        <button type="button" onClick={ws.reset} style={{ background: "none", border: 0, padding: 0, color: "var(--emerald-200)", textDecoration: "underline", cursor: "pointer", fontSize: 12 }}>
-          Reset demo
-        </button>
+        Real loans from Vesta plus voice-agent leads. A person oversees every bot message.
       </div>
     </nav>
   );

@@ -1,8 +1,6 @@
-import { EscalationsView } from "@/components/QueueViews";
-import { loadLoans } from "@/lib/data";
-import { indexLoans } from "@/lib/loan-index";
+import { redirect } from "next/navigation";
 
-export default async function EscalationsPage() {
-  const { loans } = await loadLoans();
-  return <EscalationsView loans={indexLoans(loans)} />;
+/** Moved in the simpler layout (Today, Loans, Inbox, Bots). */
+export default function Moved() {
+  redirect("/");
 }
