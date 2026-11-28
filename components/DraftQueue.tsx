@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { submitReview } from "@/app/(app)/review-actions";
+import { retrySend, submitReview } from "@/app/(app)/review-actions";
 import type { SavedReviews } from "@/lib/reviews";
 import type { Draft, DraftResult, TaskType } from "@/lib/drafts";
 import { useWorkspace, type ReviewOutcome, type ReviewTally } from "./Workspace";
@@ -124,6 +124,29 @@ function DraftCard({ d, loanName, send, saved }: { d: Draft; loanName: string; s
   );
 }
 
+function RetryButton({ id }: { id: string }) {
+  const ws = useWorkspace();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      className="btn"
+      style={{ marginLeft: 8, padding: "2px 10px", minHeight: 0 }}
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const r = await retrySend(id);
+          ws.flash(!r.ok ? r.error : r.sent ? "Sent." : r.note ?? "Not sent.");
+          router.refresh();
+        })
+      }
+    >
+      {pending ? "Sending…" : "Send now"}
+    </button>
+  );
+}
+
 type QueueProps = {
   result: DraftResult;
   saved: SavedReviews;
@@ -197,6 +220,25 @@ export function DraftQueue({
           )}
         </span>
       </div>
+
+      {saved.recent.length ? (
+        <details className="card" open={saved.recent.some((r) => r.send_status === "failed" || (r.send_status === "held" && r.send_error))}>
+          <summary className="section-label" style={{ cursor: "pointer" }}>Recently reviewed · what was sent</summary>
+          <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+            {saved.recent.map((r) => (
+              <span key={r.id} className="small">
+                <span className={r.send_status === "sent" ? "pill ok" : r.send_status === "failed" ? "pill attention" : r.outcome === "rejected" ? "pill muted" : "pill warn"} style={{ marginRight: 8 }}>
+                  {r.outcome === "rejected" ? "Rejected" : r.send_status === "sent" ? "Sent" : r.send_status === "failed" ? "Failed" : r.send_status === "sending" ? "Sending" : "Not sent"}
+                </span>
+                {r.task_type} to {r.to_address ?? "no address"} · {r.reviewed_by} ·{" "}
+                {new Date(r.sent_at ?? r.reviewed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {r.send_error ? <span style={{ color: "#A3261B" }}> · {r.send_error}</span> : null}
+                {r.outcome !== "rejected" && (r.send_status === "held" || r.send_status === "failed") ? <RetryButton id={r.id} /> : null}
+              </span>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       {open.length === 0 ? <div className="card ghost"><span className="muted">{empty}</span></div> : null}
       {open.map((d) => (

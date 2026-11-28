@@ -14,6 +14,22 @@ export type SavedReviews = {
   /** Draft id → outcome, for drafts already reviewed by anyone. */
   reviewed: Record<string, ReviewOutcome>;
   tallies: Record<string, ReviewTally>;
+  /** The latest reviews, newest first, with what happened when sending. */
+  recent: RecentReview[];
+};
+
+export type RecentReview = {
+  id: string;
+  task_type: string;
+  channel: string;
+  to_address: string | null;
+  subject: string | null;
+  outcome: string;
+  reviewed_by: string;
+  reviewed_at: string;
+  send_status: string;
+  send_error: string | null;
+  sent_at: string | null;
 };
 
 const WINDOW = 50;
@@ -25,7 +41,7 @@ export function missingTable(err: { code?: string; message?: string } | null): b
 }
 
 export async function loadSavedReviews(ids: string[]): Promise<SavedReviews> {
-  const none: SavedReviews = { available: false, problem: null, reviewed: {}, tallies: {} };
+  const none: SavedReviews = { available: false, problem: null, reviewed: {}, tallies: {}, recent: [] };
   if (!supabaseConfigured()) return { ...none, problem: "Supabase isn't set up for the admin app." };
   const db = getSupabaseAdmin();
   const recent = await db.from("outbound_messages").select("task_type, outcome").order("reviewed_at", { ascending: false }).limit(2000);
@@ -46,5 +62,10 @@ export async function loadSavedReviews(ids: string[]): Promise<SavedReviews> {
     if (r.error) return { ...none, problem: `Supabase: ${r.error.message}` };
     for (const row of r.data as { id: string; outcome: ReviewOutcome }[]) reviewed[row.id] = row.outcome;
   }
-  return { available: true, problem: null, reviewed, tallies };
+  const latest = await db
+    .from("outbound_messages")
+    .select("id, task_type, channel, to_address, subject, outcome, reviewed_by, reviewed_at, send_status, send_error, sent_at")
+    .order("reviewed_at", { ascending: false })
+    .limit(15);
+  return { available: true, problem: null, reviewed, tallies, recent: (latest.data ?? []) as RecentReview[] };
 }
