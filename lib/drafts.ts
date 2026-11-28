@@ -23,6 +23,7 @@ export type Inbound = {
   text: string;
   /** How the sender was matched to the loan, or why they weren't. */
   match: string;
+  messageId?: string;
 };
 
 export type Draft = {

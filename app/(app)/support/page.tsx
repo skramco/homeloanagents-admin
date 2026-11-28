@@ -1,6 +1,7 @@
 import { DraftQueue } from "@/components/DraftQueue";
 import { loadLoans } from "@/lib/data";
 import { loadSavedReviews } from "@/lib/reviews";
+import { sendInfo } from "@/lib/send";
 import { loadSupportInbox } from "@/lib/support/inbox";
 
 export default async function SupportPage() {
@@ -26,7 +27,7 @@ export default async function SupportPage() {
   );
   return (
     <DraftQueue
-      result={result} saved={saved}
+      result={result} saved={saved} send={sendInfo()}
       loanNames={loanNames}
       title="Support inbox"
       intro={`Borrowers email or text ${result.mailbox}. We match the sender to their loan by the email or phone on file, and the Concierge bot drafts an answer from that loan. A person approves, edits or rejects it before anything goes out.`}

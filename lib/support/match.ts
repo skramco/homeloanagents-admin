@@ -106,7 +106,7 @@ export function draftReplies(messages: InboundMessage[], loans: Loan[], contexts
       to: msg.address,
       subject: msg.channel === "Email" ? (/^re:/i.test(msg.subject ?? "") ? msg.subject! : `Re: ${msg.subject || "Your message"}`) : "",
     };
-    const inbound = { channel: msg.channel, from: msg.from, at: msg.at, subject: msg.subject, text: msg.text };
+    const inbound = { channel: msg.channel, from: msg.from, at: msg.at, subject: msg.subject, text: msg.text, messageId: msg.messageId };
 
     if (hits.length === 1) {
       const hit = hits[0];

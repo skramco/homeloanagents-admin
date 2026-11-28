@@ -9,4 +9,6 @@ export type InboundMessage = {
   at: string;
   text: string;
   threadId?: string;
+  /** The email's Message-ID header, so a reply threads in the borrower's mail app. */
+  messageId?: string;
 };
